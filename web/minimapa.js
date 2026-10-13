@@ -1,0 +1,12 @@
+document.addEventListener('DOMContentLoaded',()=>{
+ const map=document.querySelector('.map'),scene=document.getElementById('scene'),main=scene.ownerSVGElement,ns='http://www.w3.org/2000/svg';
+ const box=document.createElement('div');box.className='overview';box.setAttribute('role','img');box.setAttribute('aria-label','Minimapa del territorio completo; el recuadro dorado indica la vista actual');
+ const title=document.createElement('div');title.className='overview-title';title.textContent='VISTA GENERAL · OMASUYOS';box.append(title);
+ const mini=document.createElementNS(ns,'svg');mini.setAttribute('viewBox','0 0 1000 760');const shapes=document.createElementNS(ns,'g'),frame=document.createElementNS(ns,'rect');frame.setAttribute('fill','#b2840520');frame.setAttribute('stroke','#b28405');frame.setAttribute('stroke-width','2');frame.setAttribute('vector-effect','non-scaling-stroke');mini.append(shapes,frame);box.append(mini);map.append(box);
+ let pending=false,rebuild=true;
+ function draw(){pending=false;if(rebuild){rebuild=false;shapes.replaceChildren();for(const child of scene.children){if(child.id==='basemap')continue;const copy=child.cloneNode(true);copy.removeAttribute('id');copy.querySelectorAll('[id]').forEach(e=>e.removeAttribute('id'));copy.querySelectorAll('[onclick]').forEach(e=>e.removeAttribute('onclick'));shapes.append(copy)}try{const b=shapes.getBBox();if(b.width&&b.height){const pad=Math.max(b.width,b.height)*.05;mini.setAttribute('viewBox',`${b.x-pad} ${b.y-pad} ${b.width+pad*2} ${b.height+pad*2}`)}}catch(e){}}
+ const matrix=scene.getScreenCTM(),r=main.getBoundingClientRect();if(!matrix||!r.width)return;const inverse=matrix.inverse(),a=new DOMPoint(r.left,r.top).matrixTransform(inverse),b=new DOMPoint(r.right,r.bottom).matrixTransform(inverse);frame.setAttribute('x',a.x);frame.setAttribute('y',a.y);frame.setAttribute('width',Math.max(0,b.x-a.x));frame.setAttribute('height',Math.max(0,b.y-a.y));}
+ function schedule(){if(!pending){pending=true;requestAnimationFrame(draw)}}
+ new MutationObserver(records=>{for(const r of records){if(r.target.closest&&r.target.closest('#basemap'))continue;if(r.type==='childList')rebuild=true;}schedule()}).observe(scene,{attributes:true,attributeFilter:['transform','style'],childList:true,subtree:true});
+ window.addEventListener('resize',schedule);schedule();
+});

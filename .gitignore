@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+.env
+.env.*
+acceso_geovisor*.json
+
+*.backup
+*.dump
+*.log

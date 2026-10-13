@@ -1,0 +1,37 @@
+GEOVISOR OMASUYOS - VERSION LOCAL CON POSTGIS Y RUTAS
+
+1. En la consola donde funciona el servidor anterior, pulsa Ctrl+C.
+2. Conserva una copia de tu servidor.py anterior.
+3. Extrae el CONTENIDO del ZIP dentro de:
+   C:\Users\CRUZ\GeovisorOmasuyos
+   Deben quedar juntos servidor.py, iniciar.bat, web y tu carpeta .venv.
+4. Acepta reemplazar servidor.py, despues de guardar la copia.
+5. Haz doble clic en iniciar.bat e introduce la contrasena de PostgreSQL.
+   Al escribir la contrasena no aparecen caracteres: es normal.
+6. Abre http://127.0.0.1:5000 en tu navegador.
+   Deja la consola abierta mientras uses el geovisor.
+
+RUTAS
+Pulsa Origen y marca un punto del mapa; pulsa Destino y marca otro.
+Pulsa Calcular ruta. Se ajustan al nodo vehicular mas cercano, hasta 500 m.
+La distancia corresponde a los tramos de la red, sin los accesos al nodo.
+La ruta minimiza distancia, no tiempo. Usa la red preliminar bidireccional
+que ya creaste; no valida obras, sentidos, acceso ni transitabilidad.
+Si las componentes estan desconectadas se informa sin inventar una ruta.
+
+CAPAS
+Las vias y otras capas con tabla reconocida se consultan en PostGIS.
+Si una tabla no se reconoce, se conserva la copia GeoJSON y se indica
+claramente en el panel de fuentes. El limite sigue como copia referencial.
+Puedes ajustar los nombres de tablas en ALIAS dentro de servidor.py.
+No se crean, modifican ni eliminan datos de PostgreSQL desde esta app.
+La base sigue en UTM WGS84 19S / EPSG:32719; solo la visualizacion convierte
+las coordenadas a longitud/latitud / EPSG:4326.
+
+Si faltan dependencias, desde la consola de esta carpeta ejecuta:
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+COMPROBACION
+Abre /api/estado para comprobar PostGIS y pgRouting. La integracion debe
+comprobarse en tu computadora con tu base real; este paquete no contiene
+contrasenas ni una copia de la base de datos.

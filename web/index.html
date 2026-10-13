@@ -33,4 +33,4 @@ fetch('data/centros_salud_omasuyos.geojson').then(r=>{if(!r.ok)throw Error();ret
 function resizeHealth(){document.querySelectorAll('.health-symbol').forEach(p=>p.setAttribute('transform',`scale(${1/scale})`))}const educationZoom=zoom;zoom=function(f){educationZoom(f);resizeHealth()};
 </script><script src="categorias.js"></script><script src="mapas-base.js"></script><script src="orientacion-escala.js"></script><script src="herramientas.js"></script><script src="tarjetas-herramientas.js"></script><script src="organizacion-panel.js"></script></html>
 <script src="minimapa.js"></script><script src="panel-plegable.js"></script>
-<script src="consulta-simbologia.js"></script>
+<script src="consulta-simbologia.js"></script><script src="planeamiento.js"></script>

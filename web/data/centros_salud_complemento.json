@@ -1,0 +1,138 @@
+{
+ "1": {
+  "foto": "assets/salud/salud_1_hospital_achacachi.jpg",
+  "foto_fuente": "Facebook · Hospital Achacachi 2022",
+  "foto_fecha": "publicada en su página",
+  "direccion": "Zona Norte Churubamba, Achacachi",
+  "quirofano": "Sí – modernizado el 18/09/2023 (autoclave y lámpara cialítica)",
+  "web": "https://www.facebook.com/profile.php?id=100083573521970",
+  "observacion": "Nombre en fachada: Hospital Municipal «Cap. Juan Uriona» Achacachi – 2do Nivel. Atención «siempre abierto» según su página. Recibió donación de botellones de oxígeno (GAM Achacachi).",
+  "fuentes": {
+   "direccion": "Facebook Hospital Achacachi 2022",
+   "quirofano": "Facebook Hospital Achacachi 2022 (post 18/09/2023)",
+   "web": "Facebook",
+   "observacion": "foto de fachada y Facebook GAM Achacachi"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Hospital De Achacachi",
+  "maps_plus": "X854+2WM, Achacachi",
+  "maps_lat": -16.0424057,
+  "maps_lon": -68.692712,
+  "maps_calificacion": "4.0 ★ (2 opiniones)",
+  "maps_nota": "En Google Maps no hay una foto donde se lea el nombre del establecimiento."
+ },
+ "2": {
+  "foto": "assets/salud/maps_2_warisata.jpg",
+  "foto_fuente": "Google Maps · foto de usuario (Joe David Charca Ramos)",
+  "acceso": "Plus Code 28GP+7V7 (Warisata)",
+  "observacion": "Recibió equipo de rayos X portátil de última generación (GAM Achacachi, 11/09/2026). Participa en estudio de telemedicina (UASB, 2025).",
+  "fuentes": {
+   "acceso": "archivo.biz",
+   "observacion": "Facebook GAM Achacachi / UASB"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "C. S. Con internacion Warisata",
+  "maps_plus": "28GP+7V7, Warisata",
+  "maps_lat": -15.9734654,
+  "maps_lon": -68.6633887,
+  "foto_fecha": "ene 2022",
+  "maps_nota": "La foto principal de esta ficha proviene de Google Maps (rótulo «C.S. CON INTERNACIÓN WARISATA» en el edificio)."
+ },
+ "3": {
+  "foto": "assets/salud/salud_3_ancoraimes.jpg",
+  "foto_fuente": "Facebook · GAM Ancoraimes",
+  "foto_fecha": "entrega del nuevo edificio",
+  "observacion": "Nuevo edificio «Centro de Salud Integral Ancoraimes», entregado por el GAM Ancoraimes (entrega provisional y luego definitiva, ~2025).",
+  "fuentes": {
+   "observacion": "Facebook GAM Ancoraimes"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Centro de Salud Integral Ancoraimes",
+  "maps_plus": "34X2+FG, Ancoraimes",
+  "maps_lat": -15.901301,
+  "maps_lon": -68.8986422,
+  "maps_foto": "assets/salud/maps_3_ancoraimes.jpg",
+  "maps_foto_tipo": "foto de usuario"
+ },
+ "4": {
+  "foto": "assets/salud/salud_4_chua_cocani.jpg",
+  "foto_fuente": "Sala de Prensa – La Iglesia de Jesucristo (vía Google Imágenes)",
+  "observacion": "Letrero de fachada: «Centro de Salud Chua Cocani – Emergencia 24 hrs». Edificio de 2 plantas. Beneficiado con donación de equipamiento (Iglesia SUD).",
+  "fuentes": {
+   "observacion": "foto de fachada / Sala de Prensa Iglesia SUD; Mapcarta N6584014786"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Centro de Salud Chua Cocani",
+  "maps_plus": "R762+26H, Chua Cocani",
+  "maps_lat": -16.1899291,
+  "maps_lon": -68.7493777,
+  "maps_calificacion": "4.0 ★ (8 opiniones)",
+  "maps_horario": "Lun–Vie 8:00–18:00 · Dom cerrado (consulta externa)",
+  "maps_nota": "La foto de Maps en este punto corresponde a la U.E. Ismael Montes, no al centro de salud."
+ },
+ "5": {
+  "foto": "assets/salud/salud_5_huarina.jpg",
+  "foto_fuente": "Wikiloc (vía Google Imágenes)",
+  "foto_fecha": "09/03/2021",
+  "web": "https://www.facebook.com/profile.php?id=100062532364345",
+  "observacion": "Letrero «Centro de Salud Huarina» en portón de ingreso. Realiza ferias de salud (SUS) y talleres comunitarios.",
+  "fuentes": {
+   "web": "Facebook C.S. con Internación Huarina",
+   "observacion": "Wikiloc / Facebook"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Centro De Salud (Huarina)",
+  "maps_plus": "RC32+99P, Huarina",
+  "maps_lat": -16.1965405,
+  "maps_lon": -68.5990364,
+  "maps_calificacion": "1.0 ★ (1 opinión)",
+  "maps_nota": "La única foto de Maps (may 2019) muestra un edificio sin letrero visible; no se usa."
+ },
+ "6": {
+  "acceso": "Plus Code Q8R2+794 (Huatajata)",
+  "observacion": "Inauguró laboratorio clínico propio. Supervisado por SEDES La Paz.",
+  "fuentes": {
+   "acceso": "archivo.biz",
+   "observacion": "TikTok / Facebook SEDES La Paz"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Centro De Salud Huatajata",
+  "maps_plus": "Q8R2+794, Huatajata",
+  "maps_lat": -16.2093545,
+  "maps_lon": -68.6990618,
+  "maps_nota": "Maps solo tiene Street View desde la carretera; el edificio se ve lejos y sin letrero legible."
+ },
+ "7": {
+  "foto": "assets/salud/maps_7_sancajahuira.jpg",
+  "foto_fuente": "Google Maps · foto de usuario",
+  "foto_fecha": "letrero «Red Municipal de Salud Huatajata – Centro de Salud con Internación Sankajahuira»",
+  "web": "http://huatajata2030.blogspot.com/2017/11/centro-de-salud-de-la-comunidad.html",
+  "observacion": "Edificio de una planta con techo rojo, junto a la carretera.",
+  "fuentes": {
+   "web": "Blog El Huatajateño",
+   "observacion": "foto 2017"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "Centro de Salud - SANCAJAHUIRA",
+  "maps_plus": "Q8MH+V5 Chilaya",
+  "maps_direccion": "Ruta Nacional 2 15-54",
+  "maps_lat": -16.2153346,
+  "maps_lon": -68.6720994,
+  "maps_calificacion": "3.3 ★ (3 opiniones)",
+  "maps_nota": "La foto principal de esta ficha proviene de Google Maps."
+ },
+ "8": {
+  "foto": "assets/salud/salud_8_santiago_de_huata.jpg",
+  "foto_fuente": "ABI – Agencia Boliviana de Información",
+  "observacion": "Letrero de fachada: «Centro de Salud Santiago de Huata». Recibió equipamiento e insumos médicos (SEDES/MSyD, nota ABI).",
+  "fuentes": {
+   "observacion": "ABI; video Radio Líder 97 (Facebook)"
+  },
+  "actualizado": "2026-10-15",
+  "maps_nombre": "HOSP. CS SANTIAGO HUATA",
+  "maps_plus": "W5VP+V5 Santiago de Huata",
+  "maps_lat": -16.0553611,
+  "maps_lon": -68.814501,
+  "maps_nota": "Google Maps no tiene fotos de este establecimiento."
+ }
+}

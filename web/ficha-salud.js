@@ -1,21 +1,33 @@
-/* Ficha del establecimiento de salud en 6 bloques.
+/* Ficha del establecimiento de salud.
    Datos base: capa de salud (PostGIS o copia GeoJSON).
-   Datos complementarios (fotos, teléfonos, camas, etc.): data/centros_salud_complemento.json,
-   indexado por id_salud. Cada dato agregado guarda su fuente. */
+   Datos complementarios: data/centros_salud_complemento.json, indexado por id_salud.
+   Imagen Street View: campo "sv" del complemento; se muestra en una ficha pequeña
+   que se abre al costado de la ficha principal. */
 (function(){
  let extra={};
  fetch('data/centros_salud_complemento.json').then(r=>r.ok?r.json():{}).then(d=>{extra=d||{}}).catch(()=>{});
 
  const css=document.createElement('style');
  css.textContent=`
- .popup.ficha-salud{width:380px;max-height:72vh}
- .fs-foto{width:100%;max-height:190px;object-fit:cover;border-radius:6px;margin:6px 0 2px;background:#eef0f6}
- .fs-cred{font-size:9.5px;color:#7b8197;margin:0 0 6px}
- .fs-badges{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 4px}
+ .popup.ficha-salud{width:390px;max-height:74vh;padding:0 16px 16px}
+ .fs-head{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:58px 1fr 58px;align-items:center;gap:8px;
+   margin:0 -16px 8px;padding:10px 12px;background:#fff;border-bottom:3px solid #0b1f6b}
+ .fs-head img{width:58px;height:58px;object-fit:contain;display:block}
+ .fs-head .fs-tit{text-align:center;line-height:1.2}
+ .fs-head .fs-tit b{display:block;font-size:12.5px;color:#0b1f6b;letter-spacing:.4px}
+ .fs-head .fs-tit small{display:block;font-size:9.5px;color:#7a6b40;letter-spacing:.8px;margin-top:2px}
+ .popup.ficha-salud h3{margin:6px 0 2px;font-size:16px;color:#0b1f6b;text-align:center}
+ .fs-cat{display:block;text-align:center;font-size:10.5px;color:#7a6b40;letter-spacing:.6px}
+ .fs-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:8px 0 4px}
  .fs-b{font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:12px;border:1px solid}
  .fs-si{background:#e5f5ea;color:#17703a;border-color:#9bd3ad}
  .fs-med{background:#fff4dc;color:#8a5a00;border-color:#f0cf7d}
  .fs-no{background:#f1f2f6;color:#8a90a5;border-color:#d8dbe5}
+ .fs-svbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:8px 0 2px;padding:7px;border-radius:6px;
+   border:1px solid #0b1f6b;background:#0b1f6b;color:#fff;font-weight:600;font-size:11.5px;cursor:pointer}
+ .fs-svbtn:hover{background:#13308f}
+ .fs-svbtn.fs-svno{background:#f1f2f6;color:#6b7187;border-color:#d8dbe5}
+ .fs-svbtn[disabled]{background:#f1f2f6;color:#8a90a5;border-color:#d8dbe5;cursor:default}
  .fs-blq{margin-top:10px;border:1px solid #e1e4ee;border-radius:7px;overflow:hidden}
  .fs-blq h4{margin:0;padding:5px 8px;font-size:11px;letter-spacing:.5px;background:#0b1f6b;color:#fff;text-transform:uppercase}
  .fs-row{display:grid;grid-template-columns:42% 58%;font-size:11.5px;border-top:1px solid #eef0f5}
@@ -24,18 +36,18 @@
  .fs-row span{padding:4px 8px;word-break:break-word}
  .fs-vacio{color:#a3a8ba}
  .fs-src{font-size:9.5px;color:#7b8197;display:block}
- .fs-maps{margin-top:12px;border-top:2px solid #0b1f6b;padding-top:8px}
- .fs-maps h4{margin:0 0 6px;font-size:12px;color:#0b1f6b;text-transform:uppercase;letter-spacing:.4px}
- .fs-maps img{width:100%;max-height:230px;object-fit:cover;border-radius:6px;display:block;background:#eee}
- .fs-maps .fs-links{display:flex;gap:6px;margin-top:6px}
- .fs-maps .fs-links a{flex:1;text-align:center;padding:6px;border-radius:6px;background:#0b1f6b;color:#fff;text-decoration:none;font-size:11px;font-weight:600}
- .fs-maps .fs-links a.sv{background:#e8a317;color:#111}
- .fs-btn{margin-top:10px;width:100%;padding:7px;border:1px solid #0b1f6b;background:#fff;color:#0b1f6b;border-radius:6px;font-weight:600;cursor:pointer;font-size:11.5px}
- .fs-btn:hover{background:#0b1f6b;color:#fff}
- .fs-tabla{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px}
- .fs-tabla td{padding:3px 6px;border-top:1px solid #e3e6ef;vertical-align:top;word-break:break-word}
- .fs-tabla tr:nth-child(odd){background:#f6f7fb}
- .fs-tabla td:first-child{font-weight:600;color:#0b1f6b;width:42%}`;
+ .fs-sv{position:fixed;z-index:1200;width:330px;background:#fff;border-radius:10px;box-shadow:0 8px 40px #07077440;
+   overflow:hidden;font-family:inherit;animation:fsIn .18s ease-out}
+ @keyframes fsIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+ .fs-sv .fs-svh{height:auto;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:#0b1f6b;color:#fff}
+ .fs-sv .fs-svh b{font-size:11.5px;letter-spacing:.4px}
+ .fs-sv .fs-svh button{border:0;background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+ .fs-sv img{display:block;width:100%;height:200px;object-fit:cover;background:#e9ebf2;cursor:zoom-in}
+ .fs-sv.grande{width:min(760px,70vw)}
+ .fs-sv.grande img{height:auto;max-height:62vh;cursor:zoom-out}
+ .fs-sv p{margin:0;padding:6px 10px 8px;font-size:10.5px;color:#4a5068;line-height:1.35}
+ .fs-sv p small{display:block;color:#8a90a5;font-size:9.5px;margin-top:2px}
+ .fs-sv .fs-nosv{padding:22px 14px;text-align:center;color:#6b7187;font-size:11.5px;background:#f6f7fb}`;
  document.head.append(css);
 
  const vacio=v=>v===null||v===undefined||v==='';
@@ -62,19 +74,50 @@
   return b;
  }
 
+ // ---------- Ficha pequeña de Street View (sale al costado de la ficha principal) ----------
+ let svCard=null;
+ function cerrarSV(){if(svCard){svCard.remove();svCard=null}}
+ function ubicarSV(){
+  if(!svCard)return;const info=document.getElementById('info');if(!info)return;
+  const r=info.getBoundingClientRect(), w=svCard.offsetWidth, h=svCard.offsetHeight, m=12;
+  let left=r.left-w-m; if(left<m) left=Math.max(m,r.left);            // si no cabe a la izquierda, se superpone
+  let top=Math.min(Math.max(m,r.top),window.innerHeight-h-m);
+  svCard.style.left=left+'px';svCard.style.top=top+'px';
+ }
+ function abrirSV(p,sv){
+  cerrarSV();
+  svCard=el('div','fs-sv');
+  const hd=el('div','fs-svh');hd.append(el('b',null,'📷 VISTA DE CALLE · '+(p.nombre||'')));
+  const x=el('button',null,'×');x.title='Cerrar';x.onclick=cerrarSV;hd.append(x);svCard.append(hd);
+  if(sv&&sv.foto){
+   const img=el('img');img.src=sv.foto;img.alt='Street View de '+(p.nombre||'');
+   img.title='Clic para ampliar';img.onclick=()=>{svCard.classList.toggle('grande');requestAnimationFrame(ubicarSV)};
+   img.onload=ubicarSV;
+   img.onerror=()=>{img.replaceWith(el('div','fs-nosv','No se pudo cargar la imagen.'))};
+   const t=el('p',null,(sv.dist!=null?'Tomada desde la vía, a unos '+sv.dist+' m del punto del establecimiento, mirando hacia él.':'Vista de calle del establecimiento.'));
+   t.append(el('small',null,'Imagen: © Google Street View'+(sv.fecha?' · '+sv.fecha:'')));
+   svCard.append(img,t);
+  } else {
+   svCard.append(el('div','fs-nosv',(sv&&sv.nota)||'Google Street View no tiene cobertura en este sector.'));
+  }
+  document.body.append(svCard);ubicarSV();
+ }
+ window.addEventListener('resize',ubicarSV);
+
  window.selectHealth=function(f){
   const p=f.properties||{};const x=extra[String(p.id_salud)]||{};const fx=x.fuentes||{};
   const g=(k)=>vacio(x[k])?p[k]:x[k];
-  const info=document.getElementById('info');info.replaceChildren();info.classList.add('ficha-salud');
-  info.append(el('span','tag','ESTABLECIMIENTO DE SALUD · '+(p.categoria||'')));
-  info.append(el('h3',null,p.nombre||'Establecimiento sin nombre'));
+  const info=document.getElementById('info');info.replaceChildren();info.classList.add('ficha-salud');info.scrollTop=0;
 
-  if(x.foto){
-   const img=el('img','fs-foto');img.src=x.foto;img.alt='Foto de '+(p.nombre||'');img.loading='lazy';
-   img.onerror=()=>{img.remove();cred.remove()};
-   const cred=el('p','fs-cred','Foto: '+(x.foto_fuente||'fuente no indicada')+(x.foto_fecha?' · '+x.foto_fecha:''));
-   info.append(img,cred);
-  }
+  // Encabezado: logo del Ejército (izq.) · título (centro) · logo EMTE (der.)
+  const hd=el('div','fs-head');
+  const l1=el('img');l1.src='assets/logos/ejercito_bolivia.png';l1.alt='Ejército de Bolivia';
+  const l2=el('img');l2.src='assets/logos/emte.png';l2.alt='Escuela Militar de Topografía del Ejército';
+  const tt=el('div','fs-tit');tt.append(el('b',null,'FICHA DE ESTABLECIMIENTO DE SALUD'),el('small',null,'GEOVISOR OMASUYOS · EMTE'));
+  hd.append(l1,tt,l2);info.append(hd);
+
+  info.append(el('h3',null,p.nombre||'Establecimiento sin nombre'));
+  if(p.categoria)info.append(el('span','fs-cat',p.categoria));
 
   const bd=el('div','fs-badges');
   bd.append(badge('Emergencia'+(p.emergencia&&p.emergencia!=='No'&&p.emergencia!=='Sí'?' '+p.emergencia.toLowerCase():''),p.emergencia),
@@ -82,6 +125,12 @@
             badge(p.horario==='24 horas'?'24 horas':'No 24 h',p.horario==='24 horas'?'Sí':'No'),
             badge('Laboratorio',p.laboratorio));
   info.append(bd);
+
+  const sv=x.sv||null;
+  const sb=el('button','fs-svbtn',sv&&sv.foto?'📷 Ver imagen de la vista de calle':'📷 Sin imagen de vista de calle');
+  if(!(sv&&sv.foto))sb.classList.add('fs-svno');
+  sb.onclick=()=>{if(svCard)cerrarSV();else abrirSV(p,sv)};
+  info.append(sb);
 
   info.append(bloque('1. Identificación',[
    ['Categoría',p.categoria],['Tipo',p.tipo],['Nivel de atención',p.nivel],['Subsector',p.subsector],
@@ -96,48 +145,22 @@
    ['Este (UTM 19S)',vacio(p.este_origen)?null:Math.round(p.este_origen)+' m'],['Norte (UTM 19S)',vacio(p.norte_origen)?null:Math.round(p.norte_origen)+' m'],
    ['Latitud / Longitud',vacio(p.latitud_origen)?null:n(p.latitud_origen)+' , '+n(p.longitud_origen)],
    ['Municipio',p.municipio],['Comunidad',x.comunidad,fx.comunidad],['Dirección',g('direccion'),fx.direccion],
-   ['Altitud',x.altitud,fx.altitud],['Acceso',x.acceso,fx.acceso],
-   ['Ver en Google Maps',vacio(p.latitud_origen)?null:'https://www.google.com/maps?q='+p.latitud_origen+','+p.longitud_origen]]));
+   ['Altitud',x.altitud,fx.altitud],['Acceso',x.acceso,fx.acceso]]));
   info.append(bloque('4. Comunicación y contacto',[
    ['Teléfono',g('telefono'),fx.telefono],['Responsable',x.responsable,fx.responsable],
    ['Página / Facebook',x.web,fx.web],['Correo',x.correo,fx.correo]]));
   info.append(bloque('5. Apoyo logístico',[
    ['Ambulancias (del municipio)',p.ambulancias_municipio],['Ambulancias propias',x.ambulancias_propias,fx.ambulancias_propias],
    ['Hospital de referencia',x.hospital_referencia||(p.categoria&&p.categoria.startsWith('HOSPITAL')?null:'Hospital Achacachi (2do nivel)'),fx.hospital_referencia||(x.hospital_referencia?null:'red de salud de Omasuyos')]]));
-  info.append(bloque('6. Confiabilidad del dato',[
-   ['Precisión de la ubicación',p.precision_declarada],['Fuente',p.fuente],['Fuente de ubicación',p.fuente_ubicacion],
-   ['Gestión',p.gestion],['Datos complementados',x.actualizado,null],['Observaciones',g('observacion'),fx.observacion]]));
 
-  const btn=el('button','fs-btn','Ver todos los atributos');let tabla=null;
-  btn.onclick=()=>{
-   if(tabla){tabla.remove();tabla=null;btn.textContent='Ver todos los atributos';return}
-   tabla=el('table','fs-tabla');
-   const todos={...p};for(const [k,v] of Object.entries(x))if(k!=='fuentes'&&!k.startsWith('maps_'))todos['+ '+k]=v;
-   for(const [k,v] of Object.entries(todos)){const tr=el('tr');tr.append(el('td',null,k),el('td',vacio(v)?'fs-vacio':null,vacio(v)?'—':String(v)));tabla.append(tr)}
-   btn.after(tabla);btn.textContent='Ocultar tabla de atributos';
-  };
-  info.append(btn);
-
-  // 7. Vista en Google Maps (al final de la ficha)
-  const lat=x.maps_lat||p.latitud_origen, lon=x.maps_lon||p.longitud_origen;
-  if(lat&&lon){
-   const m=el('div','fs-maps');m.append(el('h4',null,'7. Vista en Google Maps'));
-   if(x.maps_foto){
-    const im=el('img');im.src=x.maps_foto;im.alt='Google Maps: '+(x.maps_nombre||p.nombre||'');im.loading='lazy';
-    const cr=el('p','fs-cred','Imagen: Google Maps'+(x.maps_foto_tipo?' ('+x.maps_foto_tipo+')':'')+' · '+(x.maps_nombre||''));
-    im.onerror=()=>{im.remove();cr.remove()};m.append(im,cr);
-   } else m.append(el('p','fs-cred',x.maps_nota||'Google Maps no tiene una foto de la fachada con el nombre de este establecimiento.'));
-   const filas=[['Nombre en Maps',x.maps_nombre],['Plus Code',x.maps_plus],['Dirección (Maps)',x.maps_direccion],
-     ['Horario (Maps)',x.maps_horario],['Calificación',x.maps_calificacion],['Coordenadas Maps',x.maps_lat?(x.maps_lat+', '+x.maps_lon):null]].filter(r=>!vacio(r[1]));
-   if(filas.length){const b=bloque('Datos de Google Maps',filas);b.querySelector('h4').remove();m.append(b)}
-   const ln=el('div','fs-links');
-   const a1=el('a',null,'📍 Abrir en Google Maps');a1.href=x.maps_url||('https://www.google.com/maps/search/?api=1&query='+lat+','+lon);a1.target='_blank';a1.rel='noopener';
-   const a2=el('a','sv','👁 Ver en Street View');a2.href='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint='+lat+','+lon;a2.target='_blank';a2.rel='noopener';
-   ln.append(a1,a2);m.append(ln);info.append(m);
-  }
+  // La ficha pequeña se abre sola cuando hay imagen.
+  if(sv&&sv.foto)abrirSV(p,sv);else cerrarSV();
  };
 
- // Al mostrar otra ficha, se quita el ancho especial.
+ // Al mostrar otra ficha o cerrar la principal, se quita el ancho especial y la ficha pequeña.
  const info=document.getElementById('info');
- if(info)new MutationObserver(()=>{if(!info.querySelector('.fs-blq')&&!info.querySelector('.fs-foto'))info.classList.remove('ficha-salud')}).observe(info,{childList:true});
+ if(info){
+  new MutationObserver(()=>{if(!info.querySelector('.fs-head')){info.classList.remove('ficha-salud');cerrarSV()}}).observe(info,{childList:true});
+  new MutationObserver(()=>{const st=getComputedStyle(info);if(st.display==='none'||st.visibility==='hidden')cerrarSV();else ubicarSV()}).observe(info,{attributes:true,attributeFilter:['style','class']});
+ }
 })();

@@ -35,3 +35,35 @@ COMPROBACION
 Abre /api/estado para comprobar PostGIS y pgRouting. La integracion debe
 comprobarse en tu computadora con tu base real; este paquete no contiene
 contrasenas ni una copia de la base de datos.
+
+CALCO MILITAR (PROYECTO PLANEAMIENTO)
+En el panel izquierdo aparece "Calco militar - PLANEAMIENTO" con el
+catalogo de 192 simbolos del reglamento, 31 lineas tacticas y 30 zonas.
+Elige un simbolo y toca el mapa (o arrastralo al mapa). Arrastralo para
+moverlo, estiralo por las esquinas y giralo con el punto superior.
+Lineas y zonas: toca cada punto y pulsa Terminar (o Enter).
+La ficha permite cambiar bando, escalon, designaciones, textos, previsto
+y opacidad, y muestra las coordenadas (lat/lon y UTM) para copiarlas.
+Guardar shape (ZIP, EPSG:3857), Descargar GeoJSON y Guardar carta (PNG A4
+con cuadricula UTM, escala y norte) descargan el calco.
+
+El calco se guarda en PostgreSQL, en el esquema "planeamiento"
+(tablas simbolos_militares, lineas_tacticas y zonas_tacticas, EPSG:3857).
+Es lo unico que escribe el geovisor; se crea solo la primera vez, con el
+calco inicial de planeamiento_inicial.json. QGIS puede abrir esas tablas
+(usuario editor_companero) y editar el mismo calco.
+Si el servicio no responde, el calco se guarda solo en ese navegador.
+
+CONSULTA DE CARTAS IGM 1:50.000
+Pestana "Consulta de cartas" (arriba a la derecha): departamento -> division ->
+unidades militares, Puestos Militares Adelantados y cartas 1:50.000.
+Al elegir una carta se coloca georreferenciada sobre el mapa base (fija, no se
+puede mover), el mapa viaja hasta ella y aparece en "Cartas en el mapa" con
+regulador de opacidad y descargas: PDF (original del IGM si existe; si no, la
+hoja completa a escala 1:50.000) y GeoTIFF de la hoja completa (sin recorte).
+Las imagenes NO estan en el repositorio (ocupan varios GB). El servidor las lee
+de la carpeta 09_CARTAS_TOPOGRAFICAS_DIGITALES del proyecto INDICE_CARTAS_IGM_50000.
+Ruta por defecto: C:\SIG 2\INDICE_CARTAS_IGM_50000\09_CARTAS_TOPOGRAFICAS_DIGITALES
+Si esta en otra ruta, antes de iniciar:  set GEOVISOR_CARTAS=D:\ruta\09_CARTAS_TOPOGRAFICAS_DIGITALES
+Se necesitan sus subcarpetas jpg, georreferenciadas_completas, georreferenciadas y pdf.
+El indice (web/cartas/indice.json) si va en el repositorio.

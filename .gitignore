@@ -10,3 +10,7 @@ acceso_geovisor*.json
 *.backup
 *.dump
 *.log
+_respaldo_*/
+*.bak
+*.respaldo.json
+edicion_salud.json

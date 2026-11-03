@@ -1,4 +1,4 @@
-"""Geovisor Omasuyos: servicio local de consulta, sin escrituras en PostgreSQL."""
+"""Geovisor Omasuyos: servicio local de consulta. Solo el calco de PLANEAMIENTO escribe, en su propio esquema."""
 import getpass
 import math
 from pathlib import Path
@@ -24,6 +24,53 @@ def conectar():
  return psycopg.connect(host='localhost', port=5432, dbname='bgd_huarina',
   user='postgres', password=clave, connect_timeout=10,
   options='-c default_transaction_read_only=on -c statement_timeout=30000')
+
+def conectar_escritura():
+ # Solo la usa el calco de PLANEAMIENTO, que escribe únicamente en el esquema planeamiento.
+ return psycopg.connect(host='localhost', port=5432, dbname='bgd_huarina',
+  user='postgres', password=clave, connect_timeout=10,
+  options='-c statement_timeout=30000')
+
+from planeamiento_api import instalar_planeamiento
+instalar_planeamiento(app, conectar_escritura)
+from cartas_api import instalar_cartas
+instalar_cartas(app, WEB)
+
+# Rendimiento: comprime con gzip las respuestas de texto (GeoJSON, JS, CSS, HTML).
+# Las capas de web/data bajan de ~7 MB a ~1,4 MB. Se guarda una copia comprimida
+# en memoria por archivo y fecha de modificación para no recomprimir en cada visita.
+import gzip as _gzip
+import mimetypes as _mt; _mt.add_type('image/webp', '.webp')  # teselas del mapa satelital sin internet
+_GZ_TIPOS = ('application/json', 'application/geo+json', 'text/', 'application/javascript', 'image/svg+xml', 'application/octet-stream')  # octet-stream: modelo de elevación .bin
+_gz_cache = {}
+
+@app.after_request
+def _comprimir(resp):
+ try:
+  if (resp.status_code != 200 or 'gzip' not in request.headers.get('Accept-Encoding', '')
+    or resp.headers.get('Content-Encoding') or not resp.mimetype
+    or not resp.mimetype.startswith(_GZ_TIPOS)):
+   return resp
+  resp.direct_passthrough = False
+  archivo = WEB / request.path.lstrip('/') if request.method == 'GET' else None
+  clave_gz = None
+  if archivo is not None and archivo.is_file():
+   clave_gz = (str(archivo), archivo.stat().st_mtime_ns)
+  datos = _gz_cache.get(clave_gz) if clave_gz else None
+  if datos is None:
+   cuerpo = resp.get_data()
+   if len(cuerpo) < 1024:
+    return resp
+   datos = _gzip.compress(cuerpo, 6)
+   if clave_gz:
+    _gz_cache[clave_gz] = datos
+  resp.set_data(datos)
+  resp.headers['Content-Encoding'] = 'gzip'
+  resp.headers['Content-Length'] = str(len(datos))
+  resp.vary.add('Accept-Encoding')
+ except Exception:
+  app.logger.exception('No se pudo comprimir la respuesta')
+ return resp
 
 @app.get('/')
 def inicio():

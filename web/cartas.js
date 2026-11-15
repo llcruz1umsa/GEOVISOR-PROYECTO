@@ -38,6 +38,7 @@ css.textContent = `
 .cc-kpi b{display:block;font-size:17px;color:#070774}
 .cc-busca{width:100%;padding:10px 12px;border:1px solid #cdd2e4;border-radius:8px;font:13px system-ui}
 .cc-busca:focus{outline:2px solid #b28405;outline-offset:1px}
+.cc-om-busca{box-sizing:border-box;margin:0 0 8px;text-transform:none}.cc-om-it[hidden],.cc-om-res[hidden]{display:none!important}.cc-om-res{margin:6px 0}
 .cc-opc{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:12px;color:#33414a}
 .cc-opc label{display:flex;gap:6px;align-items:center;padding:0;border:0;font-size:12px}
 .cc-aviso{margin:10px 0 0;padding:8px 10px;border-radius:7px;background:#fff4dc;color:#6d5300;font-size:11.5px;line-height:1.45}
@@ -161,13 +162,15 @@ css.textContent = `
 document.head.append(css);
 
 /* ---------- capas en la escena: cartas (sobre el mapa base), índice, departamento y marcador ---------- */
+const gReg = el(null, 'g', { id: 'cc-regiones' });   // 10-11-2026: todos los departamentos en el mapa
 const capa = el(null, 'g', { id: 'cc-capa' }), gDep = el(null, 'g', { id: 'cc-dep' }), gIdx = el(null, 'g', { id: 'cc-indice' }), gPin = el(null, 'g', { id: 'cc-pin' }), gDiv = el(null, 'g', { id: 'cc-div' });
 capa.style.pointerEvents = 'none'; gPin.style.pointerEvents = 'none';
 const basemap = document.getElementById('basemap');
 // Las cartas van ENCIMA del mapa base y de todas las capas (ríos, vías, salud, educación, rutas…);
 // solo quedan sobre ellas el índice de hojas, las divisiones, el marcador y el calco de planeamiento.
 function colocarCapas() {
-  if (!gDep.isConnected) scene.append(gDiv, gDep, gIdx, gPin);
+  if (!gDep.isConnected) scene.append(gReg, gDiv, gDep, gIdx, gPin);
+  if (!gReg.isConnected) gDiv.before(gReg);
   if (capa.nextSibling !== gDiv) scene.insertBefore(capa, gDiv);
 }
 colocarCapas(); if (!basemap) setTimeout(colocarCapas, 0);
@@ -195,7 +198,7 @@ function abrir(si) {
     if (r && innerWidth > 900) { panel.style.setProperty('left', (r.right + 12) + 'px', 'important'); panel.style.setProperty('right', 'auto', 'important'); }
     else { panel.style.removeProperty('left'); panel.style.removeProperty('right'); }
   }
-  panel.hidden = !si; menuLateral.classList.toggle('cc-activo', si); masBtn.classList.toggle('on', si);
+  panel.hidden = !si; menuLateral.classList.toggle('cc-activo', si); if (si && D && !gReg.querySelector('path') && !$('cc-ver-div').checked) regionesEnMapa(false); masBtn.classList.toggle('on', si);
   masBtn.setAttribute('aria-expanded', String(si));
   if (si) setTimeout(() => document.getElementById('cc-busca').focus(), 50);
 }
@@ -206,6 +209,24 @@ const masBtn = h('button', 'cc-mas', 'EXPLORAR MÁS CARTAS ➜'); masBtn.type = 
 masBtn.title = 'Todas las cartas IGM 1:50.000 de Bolivia por departamento y división';
 masBtn.onclick = () => abrir(panel.hidden);
 menuLateral.querySelector('.cc-om').append(masBtn);
+// 04-11-2026: buscador en «Cartas Omasuyos»: filtra las 8 hojas y busca en todas las cartas y unidades de Bolivia
+const omBusca = h('input', 'cc-busca cc-om-busca'); omBusca.type = 'search'; omBusca.placeholder = 'Buscar hoja (5845-II), nombre, unidad o localidad…'; omBusca.setAttribute('aria-label', 'Buscar cartas y unidades');
+const omRes = h('div', 'cc-res cc-om-res'); omRes.hidden = true;
+menuLateral.querySelector('.cc-om').prepend(omBusca); masBtn.before(omRes);
+let tOm = 0; omBusca.addEventListener('input', () => { clearTimeout(tOm); tOm = setTimeout(buscarLateral, 150); });
+for (const t of ['pointerdown', 'click', 'keydown']) omBusca.addEventListener(t, e => e.stopPropagation());
+function buscarLateral() {
+  const t = norm(omBusca.value.trim()); omRes.replaceChildren(); omRes.hidden = !t;
+  document.querySelectorAll('#cc-om-lista .cc-om-it').forEach(b => { b.hidden = !!t && !norm(b.textContent).includes(t); });
+  if (!t || !D) return;
+  const enOm = new Set((OM || []).map(x => x.c.h));
+  const hj = D.hojas.filter(c => !enOm.has(c.h) && norm(c.h + ' ' + c.n + ' ' + c.dv + ' ' + c.dp.join(' ')).includes(t)).slice(0, 24);
+  const un = D.unidades.filter(u => norm([u.n, u.u, u.loc, u.mun, u.prov, u.dv, u.dp, u.sg, u.hj].join(' ')).includes(t)).slice(0, 20);
+  if (hj.length) { omRes.append(h('h4', null, `OTRAS CARTAS (${hj.length}${hj.length === 24 ? '+' : ''})`)); const g = h('div', 'cc-chips'); hj.forEach(c => g.append(chip(c))); omRes.append(g); }
+  if (un.length) { omRes.append(h('h4', null, `UNIDADES Y PUESTOS (${un.length}${un.length === 20 ? '+' : ''})`)); const l = h('div', 'cc-lista'); un.forEach(u => l.append(itemUnidad(u))); omRes.append(l); }
+  const vis = document.querySelectorAll('#cc-om-lista .cc-om-it:not([hidden])').length;
+  if (!hj.length && !un.length && !vis) omRes.append(h('p', 'cc-vacio', 'No se encontraron cartas ni unidades con ese texto.'));
+}
 if (asideIzq) asideIzq.append(menuLateral);
 panel.querySelector('.institution-tab-close').onclick = () => { abrir(false); masBtn.focus(); };
 if (nav) nav.addEventListener('click', e => { const b = e.target.closest('[role=tab]'); if (b && !panel.hidden) abrir(false); }, true);
@@ -229,7 +250,7 @@ const COLOR_TIPO = t => /ADELANTADO/.test(t) ? '#b42330' : /FRONTERIZO|CONTROL/.
 let vuelo = 0;
 function volar(lon0, lat0, lon1, lat1, extra = .82) {
   const [ax, ay] = aEscena(lon0, lat1), [bx, by] = aEscena(lon1, lat0), cx = (ax + bx) / 2, cy = (ay + by) / 2;
-  const s1 = Math.max(.05, Math.min(480, Math.min(1000 / Math.max(bx - ax, 1e-6), 760 / Math.max(by - ay, 1e-6)) * extra));
+  const s1 = Math.max(.008, Math.min(480, Math.min(1000 / Math.max(bx - ax, 1e-6), 760 / Math.max(by - ay, 1e-6)) * extra));
   const s0 = scale, c0 = [(500 - panX / s0), (380 - panY / s0)], id = ++vuelo, t0 = performance.now(), dur = 700;
   const paso = t => {
     if (id !== vuelo) return;
@@ -463,7 +484,7 @@ function resaltar(hoja, si) {
 }
 
 const zoomPrevio = zoom;
-zoom = function (f) { zoomPrevio(f); const g = gPin.firstChild; if (g) { const m = g.getAttribute('transform').replace(/scale\([^)]*\)/, `scale(${1 / scale})`); g.setAttribute('transform', m); } etiquetasIndice(); etiquetasDivisiones(); escalarUnidades(); };
+zoom = function (f) { zoomPrevio(f); const g = gPin.firstChild; if (g) { const m = g.getAttribute('transform').replace(/scale\([^)]*\)/, `scale(${1 / scale})`); g.setAttribute('transform', m); } etiquetasIndice(); etiquetasDivisiones(); etiquetasRegiones(); escalarUnidades(); };
 $('cc-ver-indice').onchange = dibujarIndice;
 
 /* ---------- ficha de una unidad (en la ficha de información del geovisor) ---------- */
@@ -501,7 +522,7 @@ function sub(titulo, n, llenar) {
   return d;
 }
 let MODO = 'dep', SEL = null;
-panel.querySelectorAll('.cc-modo button').forEach(b => b.onclick = () => { MODO = b.dataset.m; SEL = null; panel.querySelectorAll('.cc-modo button').forEach(x => x.classList.toggle('on', x === b)); $('cc-busca').value = ''; construir(); });
+panel.querySelectorAll('.cc-modo button').forEach(b => b.onclick = () => { MODO = b.dataset.m; SEL = null; regionesEnMapa(true); panel.querySelectorAll('.cc-modo button').forEach(x => x.classList.toggle('on', x === b)); $('cc-busca').value = ''; construir(); });
 function regiones() {   // departamentos o divisiones: {k, nombre, rs, color}
   if (MODO === 'dep') { const m = new Map(); D.departamentos.forEach(d => { if (!m.has(d.n)) m.set(d.n, { k: d.n, nombre: d.n, rs: [] }); m.get(d.n).rs.push(...d.r); }); return [...m.values()]; }
   return (DIVS || []).map(d => ({ k: d.k, nombre: d.n, rs: d.r, color: COLOR_DIV(d.k) }));
@@ -587,6 +608,51 @@ function buscar(q) {
 let tBusca = 0; $('cc-busca').addEventListener('input', e => { clearTimeout(tBusca); tBusca = setTimeout(() => buscar(e.target.value), 150); });
 function avisar(t) { const a = $('cc-aviso'); a.textContent = t; a.hidden = !t; }
 
+
+/* ---------- 10-11-2026: DEPARTAMENTOS o DIVISIONES DEL EJÉRCITO: al elegir uno se dibujan TODOS en el mapa ---------- */
+const PALETA_DEP = ['#1F5AA6', '#B03A2E', '#2E7D52', '#C77C0E', '#6F4A9B', '#13818A', '#94522B', '#5B7B1C', '#B0245F'];
+function regionesEnMapa(volarBolivia) {
+  gReg.replaceChildren();
+  if (!D) return;
+  if (MODO === 'div') {
+    $('cc-ver-div').checked = true; dibujarDivisiones();
+  } else {
+    $('cc-ver-div').checked = false; dibujarDivisiones();
+    const nombres = [...new Set(D.departamentos.map(d => d.n))].sort((a, b) => a.localeCompare(b, 'es'));
+    nombres.forEach((n, i) => {
+      const col = PALETA_DEP[i % PALETA_DEP.length], rs = D.departamentos.filter(d => d.n === n).flatMap(d => d.r);
+      const d = rs.map(r => 'M' + r.map(([lon, lat]) => aEscena(lon, lat).map(v => v.toFixed(2)).join(',')).join('L') + 'Z').join('');
+      const p = el(gReg, 'path', { d, 'fill-rule': 'evenodd', fill: col, 'fill-opacity': .12, stroke: col, 'stroke-width': 2, 'stroke-opacity': .95, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'none', 'data-n': n });
+      el(p, 'title', {}).textContent = n;
+    });
+    etiquetasRegiones();
+  }
+  if (volarBolivia) {   // Bolivia completa, a la derecha del panel de cartas (que no la tape)
+    let x0 = -69.7; const x1 = -57.4, m = map.getBoundingClientRect(), pr = panel.hidden ? null : panel.getBoundingClientRect();
+    const fr = pr && innerWidth > 900 ? Math.min(.6, Math.max(0, (pr.right - m.left) / m.width)) : 0;
+    if (fr) x0 = x0 - (x1 - x0) * fr / (1 - fr);
+    volar(x0, -22.95, x1, -9.6, .95);
+  }
+}
+function etiquetasRegiones() {
+  gReg.querySelectorAll('text').forEach(t => t.remove()); if (!D || !gReg.querySelector('path')) return;
+  const f = 1 / scale;
+  gReg.querySelectorAll('path[data-n]').forEach(p => {
+    const n = p.dataset.n, rs = D.departamentos.filter(d => d.n === n).flatMap(d => d.r), mayor = rs.reduce((a, b) => b.length > a.length ? b : a, []);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; mayor.forEach(([lo, la]) => { x0 = Math.min(x0, lo); x1 = Math.max(x1, lo); y0 = Math.min(y0, la); y1 = Math.max(y1, la); });
+    const [x, y] = aEscena((x0 + x1) / 2, (y0 + y1) / 2);
+    const t = el(gReg, 'text', { x, y, 'font-family': 'Bahnschrift,system-ui,sans-serif', 'font-size': 13, 'font-weight': 700, 'letter-spacing': '.06em', fill: p.getAttribute('stroke'), stroke: '#fff', 'stroke-width': 3.5, 'paint-order': 'stroke', 'text-anchor': 'middle', 'pointer-events': 'none', transform: `translate(${x} ${y}) scale(${f}) translate(${-x} ${-y})` });
+    t.textContent = n;
+  });
+}
+/* 10-11-2026: el índice de hojas, los departamentos y las divisiones solo se ven (y solo reciben clics) mientras se usa
+   la herramienta de cartas; así los cuadros de las hojas ya no tapan el mapa ni agregan cartas sin querer. */
+function herramientaCartas() { return !panel.hidden || (menuLateral.isConnected && !menuLateral.classList.contains('pp-oculto') && !!menuLateral.offsetParent); }
+let cartasVisibles = null;
+setInterval(() => {
+  const si = herramientaCartas(); if (si === cartasVisibles) return; cartasVisibles = si;
+  for (const g of [gReg, gDiv, gDep, gIdx]) g.style.display = si ? '' : 'none';
+}, 400);
 /* ---------- arranque ---------- */
 fetch('cartas/indice.json').then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(d => {
   D = d; d.hojas.forEach(c => HOJAS.set(c.h, c));

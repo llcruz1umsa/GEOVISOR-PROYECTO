@@ -132,8 +132,10 @@ window.EMTE_LEYENDA_CAMPO = () => activa ? [...['ALTA', 'MEDIA', 'BAJA'].filter(
 
 /* ---------------- GPS: mi ubicación ---------------- */
 function aviso(t, ms = 5000) { const a = h('div', 'gps-aviso', t); mapa.append(a); setTimeout(() => a.remove(), ms); }
+// 11-11-2026: el GPS también funciona en la app Android (puente de ubicación) aunque el servidor sea http://IP
+const gpsPosible = () => !!navigator.geolocation && (window.isSecureContext || typeof window.__geoUbicacion === 'function');
 function motivo(e) {
-  if (!window.isSecureContext) return 'El GPS del navegador solo funciona en la misma computadora (127.0.0.1) o con conexión segura (https).';
+  if (!gpsPosible()) return 'En el navegador de la tablet o celular el GPS solo funciona con conexión segura (https). Usa la app Android del Geovisor (escanea el QR «Instalar la app Android») o el programa de PC.';
   return e && e.code === 1 ? 'Permiso de ubicación denegado. Actívalo en el candado de la barra de direcciones.' : e && e.code === 3 ? 'No se obtuvo señal de ubicación a tiempo. Intenta de nuevo al aire libre.' : 'No se pudo obtener la ubicación de este dispositivo.';
 }
 function posicion(ok, mal) { if (!navigator.geolocation) return mal('Este navegador no tiene GPS / ubicación.'); navigator.geolocation.getCurrentPosition(ok, e => mal(motivo(e)), { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }); }
@@ -154,7 +156,7 @@ if (herr) {
   b.onclick = e => {
     e.stopPropagation();
     if (vigila != null) { navigator.geolocation.clearWatch(vigila); vigila = null; gGps.remove(); b.classList.remove('on'); return; }
-    if (!navigator.geolocation || !window.isSecureContext) { aviso(motivo()); return; }
+    if (!gpsPosible()) { aviso(motivo(), 9000); return; }
     primera = true; b.classList.add('on'); aviso('Buscando tu ubicación…', 2500);
     vigila = navigator.geolocation.watchPosition(pintar, er => { aviso(motivo(er)); navigator.geolocation.clearWatch(vigila); vigila = null; b.classList.remove('on'); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 });
   };

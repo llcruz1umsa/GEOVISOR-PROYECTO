@@ -5,7 +5,8 @@ from flask import request,session,redirect,jsonify,render_template_string
 from werkzeug.security import generate_password_hash,check_password_hash
 CONFIG=Path(__file__).resolve().parent/'acceso_geovisor.json'
 # Rutas que un invitado no puede abrir (calco militar de planeamiento y cartas IGM con divisiones del Ejército).
-SOLO_USUARIOS=('/api/planeamiento','/api/cartas','/cartas/','/cartas.js','/planeamiento/','/planeamiento.js')
+SOLO_USUARIOS=('/api/planeamiento','/api/ejercicios','/api/cartas','/cartas/','/cartas.js','/planeamiento/','/planeamiento.js',
+  '/ejercicios.js','/ffaa-organigrama.js','/militar-omasuyos.js','/tareas-tacticas.js')   # 05-11-2026: módulos militares solo con usuario
 def crear_administrador():
  if CONFIG.exists():return
  print('\nCREAR ACCESO AL GEOVISOR (distinto de PostgreSQL)')
@@ -37,7 +38,7 @@ def instalar_acceso(app,web):
   return sesiones.get(sid)
  @app.before_request
  def proteger():
-  public=request.path in ('/login','/login/invitado','/assets/logo-ejercito.png','/assets/logo-emte.png','/assets/fondo-acceso.png','/assets/himno-emte.m4a')
+  public=request.path in ('/login','/login/invitado','/assets/logo-ejercito.png','/assets/logo-emte.png','/assets/fondo-acceso.png','/assets/himno-emte.m4a','/assets/inicio-horizontal.jpg','/assets/inicio-vertical.jpg','/assets/sigta-fondo-h.jpg','/assets/sigta-fondo-v.jpg','/assets/escudo-ejercito.png','/assets/escudo-emte.png','/assets/fuente-titulo.woff2','/assets/fuente-sub.woff2','/assets/mundo.js')
   if public:return
   sesion=autentico()
   if not sesion:

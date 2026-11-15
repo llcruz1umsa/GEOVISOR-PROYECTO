@@ -43,17 +43,29 @@ const SAL = {
   'CONSULTORIO ODONTOLÓGICO': { n: 'Consultorio odontológico', s: circulo('#0E7C86', P.diente, 6.4) }
 };
 const ZONA = { 'Apta (≥ 35 m)': '#1E8B4C', 'Restringida (25–35 m)': '#C77C0E', 'No apta (< 25 m)': '#7A8594', 'Sin dimensiones': '#7A8594', 'Helipuerto': '#1F5AA6' };
+// 10-11-2026: símbolos de «Apoyo al planeamiento» más didácticos: insignia de color con un dibujo que se reconoce
+// a simple vista (casas para las comunidades, helipuerto «H», puente con arco sobre el agua y obras de agua).
+const gota = (x, y, k = 1) => `<path transform="translate(${x} ${y}) scale(${k})" d="M0-3.2C1.6-1 2.4.2 2.4 1.2A2.4 2.4 0 0 1-2.4 1.2C-2.4.2-1.6-1 0-3.2Z" fill="${B}"/>`;
+const ondas = (y, w = 4.6) => `<path d="M${-w} ${y}q${w / 4}-1.4 ${w / 2} 0t${w / 2} 0t${w / 2} 0t${w / 2} 0" stroke="${B}" stroke-width="1.1" fill="none"/>`;
 const AGUA = {
-  'Presa': `<path d="M-7-4H7L5 5H-5Z" fill="#1F78B4" stroke="${B}" stroke-width="1.3"/><path d="M-3.5 0Q-1.7-1.6 0 0T3.5 0" stroke="${B}" stroke-width="1.3" fill="none"/>`,
-  'Azud / toma': `<path d="M0-6.5L6.5 5H-6.5Z" fill="#1F78B4" stroke="${B}" stroke-width="1.3"/><path d="M-2.6 2Q-1.3 .8 0 2T2.6 2" stroke="${B}" stroke-width="1.1" fill="none"/>`,
-  'Tanque elevado': `<rect x="-5.5" y="-6.5" width="11" height="7" rx="1.5" fill="#1F78B4" stroke="${B}" stroke-width="1.3"/><path d="M-3.5.5L-4.5 6.5M3.5.5L4.5 6.5" stroke="#1F78B4" stroke-width="1.8"/>`,
-  'Reservorio cubierto': `<rect x="-6.5" y="-4.5" width="13" height="9" rx="4.5" fill="#1F78B4" stroke="${B}" stroke-width="1.3"/>`,
-  '_': `<path d="M0-8C4-2 6 1 6 3.5A6 6 0 0 1-6 3.5C-6 1-4-2 0-8Z" fill="#1F78B4" stroke="${B}" stroke-width="1.3"/>`
+  'Presa': circulo('#1F78B4', `<path d="M-5.2-4.6H-1.6L-.6 4.6H-5.2Z" fill="${B}"/>` + ondas(-1.6, 4.4).replace('M-4.4', 'M.2') + ondas(1.6, 4.4).replace('M-4.4', 'M.2'), 7.6),
+  'Azud / toma': circulo('#1F78B4', `<path d="M-5 2.6H5" stroke="${B}" stroke-width="1.6"/><path d="M-4.6-2.6H2.6M1-4.4L3 -2.6L1-.8" stroke="${B}" stroke-width="1.5" fill="none"/>` + ondas(5, 4.4), 7.2),
+  'Tanque elevado': circulo('#1F78B4', `<rect x="-3.6" y="-5.4" width="7.2" height="4.6" rx="1" fill="${B}"/><path d="M-2.6-.8L-3.6 5.4M2.6-.8L3.6 5.4M-3.1 2.2H3.1" stroke="${B}" stroke-width="1.2" fill="none"/>`, 7.2),
+  'Reservorio cubierto': circulo('#1F78B4', `<ellipse cy="-3" rx="4.6" ry="1.6" fill="${B}"/><path d="M-4.6-3V3.2A4.6 1.6 0 0 0 4.6 3.2V-3" fill="none" stroke="${B}" stroke-width="1.5"/>` + `<path transform="translate(0 .9) scale(.8)" d="M0-3.2C1.6-1 2.4.2 2.4 1.2A2.4 2.4 0 0 1-2.4 1.2C-2.4.2-1.6-1 0-3.2Z" fill="#1F78B4"/>`, 7.2),
+  '_': circulo('#1F78B4', gota(0, .4, 1.6), 7)
 };
+const casa = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})"><path d="M0-4.4L4.6-.6H3.2V3.8H-3.2V-.6H-4.6Z" fill="${B}"/><rect x="-.9" y="1" width="1.8" height="2.8" fill="currentColor"/></g>`;
 function apoyo(capa, f) {
-  if (capa === 'comunidades') { const r = f[3] === 'Pueblo' ? 6.2 : f[3] === 'Comunidad' ? 4.4 : 3.3; return `<circle r="${r}" fill="${B}" stroke="#5B3A1E" stroke-width="1.8"/><circle r="${r * .42}" fill="#5B3A1E"/>`; }
-  if (capa === 'zonas') { const c = ZONA[f[7]] || '#7A8594'; return `<circle r="7.6" fill="${c}" stroke="${B}" stroke-width="1.5"/><path d="M-3.2-4V4M3.2-4V4M-3.2 0H3.2" stroke="${B}" stroke-width="2" fill="none"/>`; }
-  if (capa === 'puentes') return `<rect x="-8.5" y="-3.6" width="17" height="7.2" fill="${B}" fill-opacity=".9"/><path d="M-8-3.5h16M-8 3.5h16M-8-3.5l-3-3M8-3.5l3-3M-8 3.5l-3 3M8 3.5l3 3" stroke="#2B2B2B" stroke-width="1.8" fill="none"/>`;
+  if (capa === 'comunidades') {
+    if (f[3] === 'Pueblo') return circulo('#5B3A1E', casa(-2.4, .8, .62) + casa(2.4, .8, .62) + casa(0, -2.4, .72), 8);
+    if (f[3] === 'Comunidad') return circulo('#7A4E2A', casa(-1.8, .4, .62) + casa(2.1, .9, .5), 6);
+    return circulo('#9C6B3F', casa(0, .3, .78), 4.6);
+  }
+  if (capa === 'zonas') {
+    const c = ZONA[f[7]] || '#7A8594';
+    return `<g color="${c}"><circle r="8.4" fill="${c}" stroke="${B}" stroke-width="1.5"/><circle r="6.2" fill="none" stroke="${B}" stroke-width="1" stroke-dasharray="2 1.4"/><path d="M-2.6-3.6V3.6M2.6-3.6V3.6M-2.6 0H2.6" stroke="${B}" stroke-width="2" fill="none"/></g>`;
+  }
+  if (capa === 'puentes') return `<g color="#3A3F47"><rect x="-8.6" y="-7" width="17.2" height="14" rx="3.4" fill="#3A3F47" stroke="${B}" stroke-width="1.3"/><path d="M-6.6-1.4H6.6" stroke="${B}" stroke-width="1.8"/><path d="M-5.4 2.6Q0-4.2 5.4 2.6" stroke="${B}" stroke-width="1.4" fill="none"/><path d="M-3.4-1.4V.6M0-1.4V-.9M3.4-1.4V.6" stroke="${B}" stroke-width="1"/><path d="M-5.6 4.6q1.4-1.4 2.8 0t2.8 0t2.8 0t2.8 0" stroke="#8FC6EE" stroke-width="1.1" fill="none"/></g>`;
   return AGUA[f[3]] || AGUA._;
 }
 const icono = (markup, tam = 18) => `<svg class="sim-ico" viewBox="-11 -11 22 22" width="${tam}" height="${tam}" aria-hidden="true">${markup}</svg>`;

@@ -152,9 +152,19 @@ const PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 's
 const OMITIR = new Set(['topo-pin', 'cc-indice']);
 const aDataURL = blob => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(blob); });
 async function incrustar(url) {
-  try { const abs = new URL(url, location.href), mismo = abs.origin === location.origin;
-    const r = await fetch(abs.href, mismo ? { credentials: 'same-origin' } : { mode: 'cors', credentials: 'omit' }); if (!r.ok) return null; return await aDataURL(await r.blob()); }
-  catch (e) { return null; }
+  // 12-11-2026: en el programa de escritorio la política de seguridad no deja leer con fetch() las imágenes «blob:»
+  // ni las teselas de internet; entonces se copian dibujándolas en un lienzo (así la carta y las imágenes salen completas).
+  const abs = (() => { try { return new URL(url, location.href); } catch (e) { return null; } })(); if (!abs) return null;
+  if (abs.protocol !== 'blob:') {
+    try { const mismo = abs.origin === location.origin;
+      const r = await fetch(abs.href, mismo ? { credentials: 'same-origin' } : { mode: 'cors', credentials: 'omit' }); if (r.ok) { const d = await aDataURL(await r.blob()); if (d) return d; } }
+    catch (e) { /* se intenta con el lienzo */ }
+  }
+  return await Promise.race([new Promise(res => {
+    const i = new Image(); if (abs.protocol !== 'blob:' && abs.protocol !== 'data:' && abs.origin !== location.origin) i.crossOrigin = 'anonymous';
+    i.onload = () => { try { const c = document.createElement('canvas'); c.width = i.naturalWidth || 256; c.height = i.naturalHeight || 256; c.getContext('2d').drawImage(i, 0, 0); res(c.toDataURL('image/png')); } catch (e) { res(null); } };
+    i.onerror = () => res(null); i.src = abs.href;
+  }), new Promise(res => setTimeout(() => res(null), 12000))]);
 }
 function conEstilo(vivo) {   // copia con los estilos calculados; lo que no se ve no se copia
   const copia = vivo.cloneNode(true), a = [vivo, ...vivo.querySelectorAll('*')], b = [copia, ...copia.querySelectorAll('*')];
@@ -168,12 +178,12 @@ function conEstilo(vivo) {   // copia con los estilos calculados; lo que no se v
   copia.removeAttribute('id');
   return copia;
 }
-async function componer(r, Wpx, Hpx) {
+async function componer(r, Wpx, Hpx, sinGrandes) {
   const s = document.createElementNS(NS, 'svg');
   s.setAttribute('xmlns', NS); s.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
   s.setAttribute('width', Wpx); s.setAttribute('height', Hpx); s.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`);
   svgMapa.querySelectorAll(':scope > defs').forEach(d => s.append(d.cloneNode(true)));
-  const fondo = document.createElementNS(NS, 'rect'); Object.entries({ x: r.x, y: r.y, width: r.w, height: r.h, fill: '#E9EDF2' }).forEach(([k, v]) => fondo.setAttribute(k, v)); s.append(fondo);
+  if (!sinGrandes) { const fondo = document.createElementNS(NS, 'rect'); Object.entries({ x: r.x, y: r.y, width: r.w, height: r.h, fill: '#E9EDF2' }).forEach(([k, v]) => fondo.setAttribute(k, v)); s.append(fondo); }
   for (const hijo of scene.children) { if (OMITIR.has(hijo.id)) continue; const c = conEstilo(hijo); if (c) { if (hijo.id === 'topo-cuadricula') c.querySelectorAll('text').forEach(t => t.remove()); s.append(c); } }
   // capas superpuestas en píxeles de pantalla (calco de planeamiento)
   mapa.querySelectorAll(':scope > svg').forEach(o => {
@@ -186,6 +196,11 @@ async function componer(r, Wpx, Hpx) {
     for (const c of o.children) { const x = conEstilo(c); if (x) n.append(x); }
     s.append(n);
   });
+  // 12-11-2026: atributos con nombre inválido (p. ej. «font:») hacían que el dibujo no se pudiera abrir: se quitan
+  const NOMBRE_OK = /^(?:(?:xlink|xml|xmlns):)?[A-Za-z_][\w.-]*$/;
+  for (const el of [s, ...s.querySelectorAll('*')]) for (const at of [...el.attributes]) if (!NOMBRE_OK.test(at.name)) el.removeAttribute(at.name);
+  if (sinGrandes) s.querySelectorAll('[data-gm-raster]').forEach(e => e.remove());
+  s.querySelectorAll('[data-gm-raster]').forEach(e => e.removeAttribute('data-gm-raster'));
   // imágenes (teselas, rásteres de análisis) incrustadas
   const imgs = [...s.querySelectorAll('image')], cache = new Map(); let fallas = 0;
   await Promise.all(imgs.map(async im => {
@@ -195,13 +210,82 @@ async function componer(r, Wpx, Hpx) {
   }));
   return { s, fallas };
 }
+// 12-11-2026: las imágenes grandes del mapa (teselas del satélite, mapas base, rásteres de análisis) se pintan
+// DIRECTO en el lienzo, una por una; dentro del dibujo SVG solo quedan las líneas, símbolos y textos.
+// Antes todo iba incrustado en un único SVG enorme que el navegador a veces no podía abrir («No se pudo guardar»).
+const limpiarXML = t => t.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '');   // caracteres que rompen el SVG
+const CACHE_IMG = new Map();
+function cargarImg(href) {
+  if (CACHE_IMG.has(href)) return CACHE_IMG.get(href);
+  const p = new Promise(res => {
+    const i = new Image(); let abs; try { abs = new URL(href, location.href); } catch (e) { return res(null); }
+    if (!/^(blob|data):$/.test(abs.protocol) && abs.origin !== location.origin) i.crossOrigin = 'anonymous';
+    const t = setTimeout(() => res(null), 15000);
+    i.onload = () => { clearTimeout(t); res(i); }; i.onerror = () => { clearTimeout(t); res(null); }; i.src = abs.href;
+  });
+  CACHE_IMG.set(href, p); setTimeout(() => CACHE_IMG.delete(href), 60000); return p;
+}
+function visibleImg(el) {
+  if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+  for (let e = el; e && e !== svgMapa; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false; }
+  return true;
+}
+function opacidad(el) { let o = 1, mezcla = ''; for (let e = el; e && e !== svgMapa.parentElement; e = e.parentElement) { const cs = getComputedStyle(e); o *= +cs.opacity || 0; const m = cs.mixBlendMode; if (!mezcla && m && m !== 'normal') mezcla = m; } return { o, mezcla }; }
 async function lienzo(r, Wpx, Hpx) {
-  const { s, fallas } = await componer(r, Wpx, Hpx);
-  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(s)], { type: 'image/svg+xml' }));
-  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
   const cv = document.createElement('canvas'); cv.width = Wpx; cv.height = Hpx; const c = cv.getContext('2d');
-  c.fillStyle = '#fff'; c.fillRect(0, 0, Wpx, Hpx); c.drawImage(img, 0, 0, Wpx, Hpx); URL.revokeObjectURL(url);
-  return { cv, fallas, s };
+  c.fillStyle = '#E9EDF2'; c.fillRect(0, 0, Wpx, Hpx);
+  const kx = Wpx / r.r.width, ky = Hpx / r.r.height; let fallas = 0;
+  // 1) imágenes grandes: directo al lienzo, en su orden
+  const grandes = [];
+  for (const im of scene.querySelectorAll('image')) {
+    const b = im.getBoundingClientRect(); if (b.width < 2 || b.height < 2) continue;
+    if (b.right < r.r.left || b.left > r.r.right || b.bottom < r.r.top || b.top > r.r.bottom) continue;
+    if (b.width < 80 && b.height < 80) continue;                         // los íconos pequeños siguen en el dibujo SVG
+    if (!visibleImg(im)) continue;
+    grandes.push({ im, b });
+  }
+  const cargadas = await Promise.all(grandes.map(g => cargarImg(g.im.getAttribute('href') || g.im.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '')));
+  const ops = grandes.map(g => opacidad(g.im));
+  const legible = () => { try { c.getImageData(0, 0, 1, 1); return true; } catch (e) { return false; } };
+  function pintarRasters(soloSeguras) {
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.fillStyle = '#E9EDF2'; c.fillRect(0, 0, Wpx, Hpx); let f = 0;
+    grandes.forEach((g, n) => {
+      const img = cargadas[n]; if (!img) { f++; return; }
+      if (soloSeguras && !/^(blob|data):/.test(img.src) && new URL(img.src).origin !== location.origin) { f++; return; }
+      c.save(); c.globalAlpha = Math.max(0, Math.min(1, ops[n].o));
+      if (ops[n].mezcla && ops[n].mezcla !== 'normal') { try { c.globalCompositeOperation = ops[n].mezcla; } catch (e) { } }
+      try { c.drawImage(img, (g.b.left - r.r.left) * kx, (g.b.top - r.r.top) * ky, g.b.width * kx, g.b.height * ky); } catch (e) { f++; }
+      c.restore();
+    });
+    return f;
+  }
+  fallas = pintarRasters(false);
+  let seguras = false; if (!legible()) { seguras = true; fallas = pintarRasters(true); }   // una tesela de internet no deja leer el lienzo
+  // 2) líneas, polígonos, símbolos y textos (SVG sin las imágenes grandes). Si el navegador no puede, se simplifica.
+  grandes.forEach(g => g.im.setAttribute('data-gm-raster', '1'));
+  let s = null, ultimoError = null, dibujado = false;
+  try { ({ s } = await componer(r, Wpx, Hpx, true)); } catch (e) { ultimoError = e; console.error('Guardar: no se pudieron copiar las capas', e); }
+  finally { scene.querySelectorAll('[data-gm-raster]').forEach(e => e.removeAttribute('data-gm-raster')); }
+  if (s) s.querySelectorAll('foreignObject, script, iframe, video, canvas').forEach(e => e.remove());
+  const variantes = [
+    x => x,
+    x => { x.querySelectorAll('image').forEach(e => e.remove()); return x; },                                    // sin íconos
+    x => { x.querySelectorAll('image, text, filter, mask, pattern').forEach(e => e.remove()); x.querySelectorAll('[filter],[mask]').forEach(e => { e.removeAttribute('filter'); e.removeAttribute('mask'); }); return x; },
+  ];
+  for (let v = 0; s && v < variantes.length && !dibujado; v++) {
+    const copia = variantes[v](v ? s.cloneNode(true) : s);
+    const texto = limpiarXML(new XMLSerializer().serializeToString(copia));
+    const url = URL.createObjectURL(new Blob([texto], { type: 'image/svg+xml' }));
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); const t = setTimeout(() => rej(new Error('tiempo agotado')), 30000); i.onload = () => { clearTimeout(t); res(i); }; i.onerror = () => { clearTimeout(t); rej(new Error('el dibujo de las capas no se pudo abrir (' + (texto.length / 1048576).toFixed(1) + ' MB)')); }; i.src = url; });
+      c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(img, 0, 0, Wpx, Hpx);
+      if (legible()) { dibujado = true; if (v) console.warn('Guardar: capas simplificadas, variante', v); }
+      else { ultimoError = new Error('el navegador bloqueó la lectura del dibujo'); fallas = pintarRasters(seguras); }
+    } catch (e) { ultimoError = e; console.warn('Guardar: variante', v, e); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  if (!dibujado) console.error('Guardar: solo se guarda la imagen de fondo', ultimoError);
+  return { cv, fallas, s, sinCapas: !dibujado };
 }
 const aBlob = (cv, tipo, q) => new Promise(res => cv.toBlob(res, tipo, q));
 function geotiff(cv, r) {   // GeoTIFF RGB sin compresión, EPSG:3857 (Web Mercator)
@@ -501,7 +585,7 @@ function guardarDatos(f) {
 panel.querySelectorAll('.gm-f').forEach(b => b.onclick = async () => {
   const f = b.dataset.f; panel.querySelectorAll('.gm-f').forEach(x => x.disabled = true);
   try { if (f === 'carta') { if (window.EMTE_CARTA) window.EMTE_CARTA.abrir(); else aviso('La carta temática no está disponible.', true); } else if (b.classList.contains('img')) await guardarImagen(f); else guardarDatos(f); }
-  catch (e) { console.error(e); aviso('No se pudo guardar. Vuelve a intentarlo o achica el recuadro.', true); }
+  catch (e) { console.error(e); aviso('No se pudo guardar' + (e && e.message ? ': ' + e.message : '') + '. Vuelve a intentarlo o achica el recuadro.', true); }
   finally { panel.querySelectorAll('.gm-f').forEach(x => x.disabled = false); }
 });
 

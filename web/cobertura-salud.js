@@ -87,6 +87,7 @@ function ficha(c) {
 function poner(on) {
   activa = on; ley.hidden = !on;
   if (!on) { img && img.remove(); gAv && gAv.remove(); return; }
+  if (!window.EMTE_MUNICIPIOS) fetch('data/municipios_omasuyos.geojson').then(r => r.json()).then(d => { window.EMTE_MUNICIPIOS = window.EMTE_MUNICIPIOS || d; }).catch(() => {});
   const listo = () => typeof healthFeatures !== 'undefined' && healthFeatures.length && window.EMTE_MUNICIPIOS && COM;
   const ir = () => {
     if (!activa) return;

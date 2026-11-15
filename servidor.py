@@ -33,6 +33,8 @@ def conectar_escritura():
 
 from planeamiento_api import instalar_planeamiento
 instalar_planeamiento(app, conectar_escritura)
+from ejercicios_api import instalar_ejercicios
+instalar_ejercicios(app, conectar_escritura)
 from cartas_api import instalar_cartas
 instalar_cartas(app, WEB)
 

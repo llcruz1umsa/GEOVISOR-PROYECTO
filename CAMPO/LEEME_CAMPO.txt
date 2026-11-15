@@ -1,0 +1,17 @@
+VISOR DE CAMPO - GEOVISOR OMASUYOS (USO RESTRINGIDO)
+
+GEOVISOR_OMASUYOS_CAMPO.html es el geovisor completo en un solo archivo.
+Funciona sin internet y sin servidor: abrelo con doble clic (Chrome o Edge) en una laptop,
+o copialo a una tableta/celular y abrelo desde la app Archivos con Chrome.
+
+Incluye: capas, imagen satelital 2026, modelo de elevacion, FFAA y puestos, planeamiento,
+herramientas de analisis (area visible, puntos de observacion, avenidas, perfiles).
+No incluye: las imagenes de las cartas IGM, ni guardar en PostgreSQL (los ejercicios y calcos
+se guardan en el mismo dispositivo).
+
+GEOVISOR_OMASUYOS_CAMPO_LIGERO.html: igual pero sin viviendas ni pendientes de alta resolucion.
+
+Para actualizarlo despues de cambiar datos: doble clic en GENERAR_VISOR_CAMPO.bat
+(o "python generar_visor_campo.py --ligero" para la version liviana).
+
+Contiene informacion militar: entreguelo solo a personal autorizado.

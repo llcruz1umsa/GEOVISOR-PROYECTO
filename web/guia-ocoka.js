@@ -18,6 +18,7 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
 const css = h('style');
 css.textContent = `
 .og-guia{grid-column:1/-1;padding:11px 11px 10px;border-radius:14px;background:linear-gradient(150deg,#0B1D33 0%,#1C3A66 70%,#2B4F80 100%);color:#fff;box-shadow:0 8px 22px #0B1D3340;position:relative;overflow:hidden}
+.og-cont{padding:8px 10px 12px}
 .og-guia::after{content:'';position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#B79A5B55,transparent 70%)}
 .og-cab{display:flex;align-items:center;gap:8px;margin:0 0 8px}
 .og-cab b{font:800 11px var(--tipo-titulo,system-ui);letter-spacing:.12em;color:#E2CB8E}
@@ -107,14 +108,19 @@ function bloqueGuia() {
   r.onclick = resumen; z.title = 'Reiniciar las marcas manuales'; z.onclick = () => { manual = {}; lss('emte-ocoka-manual', manual); refrescar(); };
   acc.append(r, z); b.append(l, acc); return b;
 }
+// 04-11-2026: la guía es un cuadro más de Planeamiento («Guía del terreno · OCOKA»), ya no un bloque fijo arriba de los cuadros
+let SEC_OG = null;
+function seccionGuia() {
+  if (SEC_OG && SEC_OG.isConnected) return SEC_OG;
+  SEC_OG = h('details', 'layer-menu hp-menu og-menu'); SEC_OG.innerHTML = '<summary>Guía del terreno · OCOKA paso a paso</summary>'; SEC_OG.append(h('div', 'og-cont'));
+  const ref = aside.querySelector(':scope > .pc-menu, :scope > .ap-menu, :scope > .coc-menu, :scope > .hp-menu'); ref ? ref.before(SEC_OG) : aside.append(SEC_OG);
+  for (const t of ['pointerdown', 'click', 'wheel']) SEC_OG.addEventListener(t, e => e.stopPropagation());
+  return SEC_OG;
+}
+seccionGuia();   // el cuadro existe desde el inicio, así aparece en la grilla de Planeamiento
 function refrescar() {
-  const g = document.querySelector('.pp-grilla'); if (!g || g.hidden) return;
-  const esPlan = [...g.querySelectorAll(':scope > .pp-cel b')].some(b => /^Pendientes de transitabilidad/i.test(b.textContent));
-  const viejo = g.querySelector(':scope > .og-guia');
-  if (!esPlan) { viejo && viejo.remove(); return; }
-  const nuevo = bloqueGuia();
-  if (viejo) viejo.replaceWith(nuevo); else { const ref = g.querySelector(':scope > .pd-act') || g.querySelector(':scope > .pd-busca'); ref ? ref.after(nuevo) : g.prepend(nuevo); }
-  ayuda(g);
+  const cont = seccionGuia().querySelector('.og-cont'); cont.replaceChildren(bloqueGuia());
+  const g = document.querySelector('.pp-grilla'); if (g) { g.querySelector(':scope > .og-guia')?.remove(); if (!g.hidden) ayuda(g); }
 }
 async function resumen() {
   const fondo = h('div', 'og-fondo'), d = h('div', 'og-dlg');
@@ -150,6 +156,7 @@ async function resumen() {
 
 /* ---------- 8. ayuda bajo pedido ---------- */
 const AYUDA = [
+  [/^Gu[ií]a del terreno/i, 'Los aspectos militares del terreno en orden (OCOKA): observación, cubierta, obstáculos, terreno clave y avenidas, más la línea de tiempo.', 'Toca cada paso para abrir su herramienta; al final pulsa RESUMEN DEL ANÁLISIS.'],
   [/^Pendientes/i, 'Clasifica el terreno según su pendiente: verde sin restricción, amarillo restringido, rojo severamente restringido.', 'Enciéndela con 👁; ajusta los límites (30 % y 60 %) dentro del cuadro.'],
   [/^Apoyo al planeamiento/i, 'Capas de apoyo: comunidades, posibles zonas de aterrizaje y fuentes de agua.', 'Entra y enciende solo las que necesites para tu misión.'],
   [/^Curvas de nivel/i, 'Curvas de nivel de las cartas IGM 1:50.000: intermedias cada 20 m y maestras cada 100 m.', 'Acerca el mapa para ver las cotas de las maestras.'],
@@ -248,11 +255,11 @@ let n = 0;
 (function esperar() {
   const g = document.querySelector('.pp-grilla'); if (!g) { if (++n < 80) setTimeout(esperar, 250); return; }
   let pend = false;
-  new MutationObserver(() => { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; const tiene = g.querySelector(':scope > .og-guia'); if (!tiene || !g.querySelector(':scope > .pp-cel .og-i')) refrescar(); }); }).observe(g, { childList: true });
+  new MutationObserver(() => { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; if (!g.hidden && g.querySelector(':scope > .pp-cel:not(:has(.og-i))')) refrescar(); }); }).observe(g, { childList: true });
   new MutationObserver(() => refrescar()).observe(g, { attributes: true, attributeFilter: ['hidden'] });
   refrescar();
   document.addEventListener('change', () => setTimeout(refrescar, 300), true);
-  setInterval(() => { if (!document.hidden) { const gg = document.querySelector('.pp-grilla > .og-guia'); if (gg) { const nn = PASOS.filter(hecho).length; if (gg.querySelector('.og-cab small')?.textContent !== `${nn} / ${PASOS.length}`) refrescar(); } } }, 3000);
+  setInterval(() => { if (!document.hidden) { const gg = document.querySelector('.og-menu .og-guia'); if (gg) { const nn = PASOS.filter(hecho).length; if (gg.querySelector('.og-cab small')?.textContent !== `${nn} / ${PASOS.length}`) refrescar(); } } }, 3000);
 })();
 window.EMTE_OCOKA = { resumen, capturar, abrirEj };
 });

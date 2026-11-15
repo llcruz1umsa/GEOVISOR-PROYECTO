@@ -69,6 +69,7 @@ function capaDe(titulo) {
   return g ? grupoCasillas(g, 'capas:' + titulo) : null;
 }
 const GRUPOS = [
+  ['ANÁLISIS GUIADO', /^Gu[ií]a del terreno/i],
   ['TERRENO', /^(Pendientes|Apoyo al planeamiento|An[aá]lisis del terreno|Curvas de nivel|Cubierta)/i],
   ['MANIOBRA Y TIEMPO', /^(Avenidas|L[ií]nea de tiempo)/i],
   ['SIMBOLOGÍA Y FUERZAS', /^(Fichas|FFAA|Fuerzas propias|Enemigo|Tareas t[aá]cticas|Obst[aá]culos)/i],

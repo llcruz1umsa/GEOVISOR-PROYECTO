@@ -51,6 +51,10 @@ const PAG = { '1': 3, '2': 4, '3': 5, '4': 6, '5': 19, '6': 20, '7': 24, '8': 14
 const pagDe = nombre => PAG[(String(nombre).match(/^(\d+)\./) || [])[1]] || 2;
 const GRP = {}; // clave del ítem -> nombre del grupo
 const STY = {}; LIN.forEach(x => STY['l' + x[0]] = x[1]); ZON.forEach(x => STY['z' + x[0]] = x[1]);
+const SIN = { l: 'Línea (elija el tipo)', z: 'Zona (elija el tipo)' };   // tipo provisional hasta elegirlo en la ficha
+const GRUPO_LZ = { Propio: ['17. Líneas tácticas', '18. Zonas y áreas'], Enemigo: '19. Enemigo: líneas y zonas', 'Obstáculo': '20. Obstáculos (verde)', Contaminado: '21. Áreas contaminadas (amarillo)', Negro: '22. Obras y poblaciones (negro)' };
+const grupoLZ = (k, b) => { const g = GRUPO_LZ[b] || GRUPO_LZ.Propio; return Array.isArray(g) ? g[k === 'l' ? 0 : 1] : g; };
+LIN.forEach(x => GRP['l' + x[0]] = grupoLZ('l', x[1].b || 'Propio')); ZON.forEach(x => GRP['z' + x[0]] = grupoLZ('z', x[1].b || 'Propio'));
 const textos = o => [[o.esc, 100, 44, 'middle'], [o.izq, 22, 111, 'end'], [o.der, 178, 111, 'start'], [o.cen, 100, 111, 'middle'], [o.aba, 100, 178, 'middle']].filter(t => t[0]);
 const sigla = o => { const st = STY[o.k + o.tipo] || {}; return st.sig != null ? st.sig : (o.tipo.includes(' - ') ? o.tipo.split(' - ')[0] : ''); };
 const r1 = v => Math.round(v * 100) / 100;
@@ -139,12 +143,16 @@ css.textContent = `
 .calco-edit th{background:#f5efdc;color:#7a6b40;font-weight:600;position:sticky;top:0}
 .calco-edit tr.c td{font-weight:700;color:#070774}
 .calco-edit .tw{max-height:150px;overflow:auto}
+.calco-edit .ce-tipo-l span{font-weight:700;color:#070774}
+.calco-edit .ce-tipo-l.falta select{border:2px solid #b28405;background:#fff8e6;animation:ce-pulso 1.2s ease-in-out 3}
+@keyframes ce-pulso{50%{box-shadow:0 0 0 4px #b2840555}}
 @media(max-width:750px){.calco-edit{left:8px;bottom:8px;width:auto;right:8px}.calco-msg{top:60px}}`;
 css.textContent += `
 .calco-borrar{width:100%;background:#fff;color:#b3261e!important;border:1px solid #b3261e!important;font-weight:700}
 .calco-borrar:hover{background:#b3261e!important;color:#fff!important}.calco-borrar.confirmar{background:#b3261e!important;color:#fff!important}
 .calco-regl{display:block;margin:6px 0 2px;font-size:11px;color:#070774;font-weight:600}
 .calco-pag{float:right;margin-left:6px;font-size:10px;font-weight:600;color:#b28405;text-decoration:none}.calco-pag:hover{text-decoration:underline}
+.ce-orden{flex-wrap:wrap;gap:4px!important}.ce-orden button{flex:1 1 45%;font-size:10.5px!important;padding:5px 4px!important}
 .ce-ref{display:block;margin:8px 0 2px;font-size:11px;font-weight:600;color:#070774}`;
 document.head.append(css);
 
@@ -189,12 +197,14 @@ ed.innerHTML = `<div class="cab"><b id="ce-nom"></b><button type="button" id="ce
 <label class="ps">Designación der.<input type="text" id="ce-der" maxlength="20"></label>
 <label class="ps">Texto centro<input type="text" id="ce-cen" maxlength="20"></label>
 <label class="ps">Texto abajo<input type="text" id="ce-aba" maxlength="20"></label>
+<label class="pv ancho ce-tipo-l"><span id="ce-tipo-t">Tipo</span><select id="ce-tipo"></select></label>
 <label class="pv">Nombre / etiqueta<input type="text" id="ce-et" maxlength="60"></label>
 <label class="pv">Fecha-hora<input type="text" id="ce-fh" maxlength="30" placeholder="160500-MAR-26"></label>
 <label class="ps fila"><input type="checkbox" id="ce-prev"> Previsto (trazo discontinuo)</label>
 <label class="ancho">Opacidad <span class="par" style="align-items:center"><input type="range" id="ce-op" min="0" max="100" step="5" style="flex:1"><span id="ce-opn" style="width:38px;text-align:right"></span></span></label>
 </div>
 <a class="ce-ref" id="ce-ref" target="_blank" rel="noopener"></a>
+<div class="acciones ce-orden"><button type="button" id="ce-frente" title="Este símbolo se dibuja encima de los demás (Re Pág)">⏫ Al frente</button><button type="button" id="ce-subir" title="Una posición más arriba">▲ Subir</button><button type="button" id="ce-bajar" title="Una posición más abajo">▼ Bajar</button><button type="button" id="ce-fondo" title="Este símbolo se dibuja debajo de los demás (Av Pág)">⏬ Al fondo</button></div>
 <div class="acciones"><button type="button" class="del" id="ce-del">Eliminar</button><button type="button" id="ce-ok">Listo</button></div>
 <div class="coords"><div><b>Coordenadas</b><span id="ce-zona"></span><button type="button" id="ce-copy">Copiar</button></div><div class="tw"><table id="ce-tab"></table></div></div>`;
 map.append(ed);
@@ -210,11 +220,13 @@ function dibujar() {
   capa.style.display = ver ? '' : 'none';
   gVec.replaceChildren(); gSym.replaceChildren(); gSel.replaceChildren();
   if (!ver) return;
-  S.forEach((o, id) => { if (o.k) feat(gVec, o, id, toScr, true); });
+  const ord = enOrden();   // 12-11-2026: orden elegido por el usuario (campo «z»)
+  ord.forEach(([id, o]) => { if (o.k) feat(gVec, o, id, toScr, true); });
   if (armed && armed.k && draft.length) feat(gVec, { k: armed.k, tipo: armed.tipo, bando: armed.bando, et: '', p: draft }, null, toScr, true);
-  S.forEach((o, id) => { if (!o.k) simbolo(gSym, o, id, toScr, V.k, true); });
+  ord.forEach(([id, o]) => { if (!o.k) simbolo(gSym, o, id, toScr, V.k, true); });
   seleccion();
 }
+function enOrden() { return [...S.entries()].map((e, n) => [e, n]).sort((a, b) => ((a[0][1].z ?? a[1]) - (b[0][1].z ?? b[1])) || a[1] - b[1]).map(x => x[0]); }
 function tamPx(o, k) { return Math.max(22, o.tam * k); }
 function simbolo(par, o, id, P, k, vivo) {
   const [px, py] = P(o.x, o.y), z = tamPx(o, k);
@@ -363,10 +375,21 @@ function select(id) {
   sel = id && S.has(id) ? id : null; coordSig = ''; const o = sel && S.get(sel);
   ficha(); programar(); if (!o) return;
   ed.querySelectorAll('.ps').forEach(e => e.hidden = !!o.k); ed.querySelectorAll('.pv').forEach(e => e.hidden = !o.k);
+  // 10-11-2026: las tareas tácticas y los obstáculos no llevan escalón, designaciones ni textos
+  if (!o.k && /^Tareas t[aá]cticas|Minas y trampas|Obst[aá]culo/i.test(GRP[o.key] || '')) ['ce-esc', 'ce-izq', 'ce-der', 'ce-cen', 'ce-aba'].forEach(id => { const l = $(id).closest('label'); if (l) l.hidden = true; });
   const gr = GRP[o.k ? o.k + o.tipo : o.key] || ''; $('ce-ref').href = REGL + '#page=' + pagDe(gr); $('ce-ref').textContent = '📖 Referencia en el reglamento · pág. ' + pagDe(gr) + (gr ? ' (' + gr.replace(/^\d+\.\s*/, '') + ')' : ''); $('ce-op').value = o.op ?? 100; $('ce-opn').textContent = (o.op ?? 100) + ' %';
-  if (o.k) { $('ce-et').value = o.et || ''; $('ce-fh').value = o.fh || ''; }
+  if (o.k) { $('ce-et').value = o.et || ''; $('ce-fh').value = o.fh || ''; tipos(o); }
   else { $('ce-esc').value = o.esc || ''; $('ce-izq').value = o.izq || ''; $('ce-der').value = o.der || ''; $('ce-cen').value = o.cen || ''; $('ce-aba').value = o.aba || ''; $('ce-prev').checked = !!o.prev; }
 }
+function tipos(o) {   // selector del tipo de línea o de zona, agrupado como en el reglamento
+  const sl = $('ce-tipo'), lista = o.k === 'l' ? LIN : ZON, falta = !STY[o.k + o.tipo]; sl.replaceChildren();
+  $('ce-tipo-t').textContent = o.k === 'l' ? 'Tipo de línea' : 'Tipo de zona o área'; sl.closest('label').classList.toggle('falta', falta);
+  if (falta) { const op = document.createElement('option'); op.value = ''; op.textContent = '— Elija el tipo —'; op.selected = true; op.disabled = true; sl.append(op); }
+  const grupos = new Map(); lista.forEach(([n, st]) => { const g = grupoLZ(o.k, st.b || 'Propio'); (grupos.get(g) || grupos.set(g, []).get(g)).push(n); });
+  [...grupos].sort((x, y) => parseInt(x[0]) - parseInt(y[0])).forEach(([g, ns]) => { const og = document.createElement('optgroup'); og.label = g.replace(/^\d+\.\s*/, ''); ns.forEach(n => { const op = document.createElement('option'); op.value = n; op.textContent = n; if (n === o.tipo) op.selected = true; og.append(op); }); sl.append(og); });
+  if (falta) setTimeout(() => { try { sl.focus(); } catch (e) { } }, 50);
+}
+$('ce-tipo').onchange = e => { const v = e.target.value, o = sel && S.get(sel); if (!o || !o.k || !v) return; const st = STY[o.k + v] || {}; cambiar(n => { n.tipo = v; n.bando = st.b || 'Propio'; }); select(sel); };
 window.EMTE_CALCO_SEL = () => sel;   // para calco-dobleclic.js (02-11-2026)
 function cambiar(f) { const o = sel && S.get(sel); if (!o) return; const n = JSON.parse(JSON.stringify(o)); f(n); poner(sel, n); ficha(); }
 $('ce-men').onclick = () => cambiar(o => o.tam = Math.max(20, Math.round(o.tam / 1.15)));
@@ -380,6 +403,23 @@ $('ce-prev').onchange = e => cambiar(o => o.prev = e.target.checked ? 1 : 0);
 $('ce-op').oninput = e => { const o = sel && S.get(sel); if (!o) return; o.op = +e.target.value; $('ce-opn').textContent = o.op + ' %'; programar(); };
 $('ce-op').onchange = e => cambiar(o => o.op = +e.target.value);
 $('ce-del').onclick = () => { if (sel) quitar(sel); };
+// 12-11-2026: orden de dibujo de los símbolos, líneas y zonas (los de más arriba tapan a los de abajo)
+function ordenar(modo) {
+  const o = sel && S.get(sel); if (!o) return;
+  const T = enOrden(), zg = new Map(T.map(([id, x], n) => [id, x.z ?? n]));
+  const L = T.filter(([, x]) => !!x.k === !!o.k), i = L.findIndex(([id]) => id === sel); if (i < 0) return;
+  const zs = L.map(([id]) => zg.get(id));
+  if (modo === 'frente') cambiar(n => { n.z = Math.max(...zs) + 1; });
+  else if (modo === 'fondo') cambiar(n => { n.z = Math.min(...zs) - 1; });
+  else {
+    const j = i + (modo === 'subir' ? 1 : -1); if (j < 0 || j >= L.length) return;
+    const otro = L[j][0], zo = zs[j], zy = zs[i], nz = zo === zy ? zo + (modo === 'subir' ? 1 : -1) : zo;
+    const ov = JSON.parse(JSON.stringify(S.get(otro))); ov.z = zy; poner(otro, ov);
+    cambiar(n => { n.z = nz; });
+  }
+}
+$('ce-frente').onclick = () => ordenar('frente'); $('ce-fondo').onclick = () => ordenar('fondo');
+$('ce-subir').onclick = () => ordenar('subir'); $('ce-bajar').onclick = () => ordenar('bajar');
 $('ce-ok').onclick = $('ce-x').onclick = () => select(null);
 $('ce-copy').onclick = async () => {
   const b = $('ce-copy');
@@ -436,7 +476,7 @@ function armar(a) {
   map.classList.toggle('calco-armado', !!a); msg.hidden = !a;
   const vec = !!(a && a.k); $('calco-fin').hidden = $('calco-undo').hidden = !vec;
   document.querySelectorAll('.calco-it').forEach(b => b.classList.toggle('on', !!a && b.dataset.key === (vec ? a.k + a.tipo : a)));
-  if (a) { $('calco-msgt').textContent = vec ? 'Toca el mapa para marcar cada punto de: ' + a.tipo : 'Toca el mapa para colocar: ' + NAME[a]; select(null); }
+  if (a) { $('calco-msgt').textContent = vec ? 'Toca el mapa para marcar cada punto de la ' + (a.k === 'l' ? 'línea' : 'zona') + '; al terminar eliges su tipo.' : 'Toca el mapa para colocar: ' + NAME[a]; select(null); }
   programar();
 }
 function colocar(px, py) {
@@ -444,7 +484,7 @@ function colocar(px, py) {
   const [x, y] = toMap(px, py);
   if (armed.k) {
     draft.push(r1(x), r1(y)); const n = draft.length / 2, falta = (armed.k === 'z' ? 3 : 2) - n;
-    $('calco-msgt').textContent = armed.tipo + ': ' + n + ' punto(s). ' + (falta > 0 ? 'Faltan ' + falta + '.' : 'Pulsa Terminar cuando acabes.');
+    $('calco-msgt').textContent = (armed.k === 'l' ? 'Línea' : 'Zona') + ': ' + n + ' punto(s). ' + (falta > 0 ? 'Faltan ' + falta + '.' : 'Pulsa Terminar cuando acabes.');
     programar(); return;
   }
   const clave = armed, b = CATB[clave] || 'Propio';
@@ -522,6 +562,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && armed && armed.k) terminar();
   if (!sel) return;
   if (e.key === 'Delete') quitar(sel);
+  if (e.key === 'PageUp') { e.preventDefault(); ordenar(e.shiftKey ? 'frente' : 'subir'); }
+  if (e.key === 'PageDown') { e.preventDefault(); ordenar(e.shiftKey ? 'fondo' : 'bajar'); }
   if (e.key === '+' || e.key === '=') cambiar(o => { if (!o.k) o.tam = Math.round(o.tam * 1.1); });
   if (e.key === '-') cambiar(o => { if (!o.k) o.tam = Math.max(20, Math.round(o.tam / 1.1)); });
 });
@@ -566,19 +608,13 @@ function catalogo(cat) {
       boton(d, c.key, g, c.nombre, () => armar(armed === c.key ? null : c.key), true);
     });
   });
-  const LZ = [...LIN.map(x => ['l', ...x]), ...ZON.map(x => ['z', ...x])];
-  const ban = st => st.b || 'Propio';
-  [['17. Líneas tácticas', i => i[0] === 'l' && ban(i[2]) === 'Propio'], ['18. Zonas y áreas', i => i[0] === 'z' && ban(i[2]) === 'Propio'],
-   ['19. Enemigo: líneas y zonas', i => ban(i[2]) === 'Enemigo'], ['20. Obstáculos (verde)', i => ban(i[2]) === 'Obstáculo'],
-   ['21. Áreas contaminadas (amarillo)', i => ban(i[2]) === 'Contaminado'], ['22. Obras y poblaciones (negro)', i => ban(i[2]) === 'Negro']].forEach(([nombre, filtro]) => {
-    const lista = LZ.filter(filtro); if (!lista.length) return;
-    const d = grupo(nombre, lista.length, false);
-    lista.forEach(([k, tipo, st]) => { GRP[k + tipo] = nombre;
-      const g = document.createElementNS(NS, 'svg'); g.setAttribute('viewBox', '0 0 40 40'); g.style.color = color(st.b || 'Propio');
-      el(g, k === 'l' ? 'path' : 'ellipse', k === 'l' ? { d: 'M5,26 L20,14 L35,22', fill: 'none', stroke: 'currentColor', 'stroke-width': Math.min(5, st.w || 2.5), 'stroke-dasharray': st.d ? '5 4' : null }
-        : { cx: 20, cy: 20, rx: 15, ry: 10, fill: st.fill ? 'currentColor' : 'none', 'fill-opacity': .3, stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-dasharray': st.d ? '5 4' : null });
-      boton(d, k + tipo, g, tipo, () => armar(armed && armed.k === k && armed.tipo === tipo ? null : { k, tipo, bando: st.b || 'Propio' }), false);
-    });
+  // Líneas y zonas: un solo botón para cada una; el tipo se elige en la ficha después de dibujarla.
+  const d = grupo('17. Líneas tácticas y zonas', 2, false);
+  [['l', SIN.l, 'Línea', { d: 'M5,26 L20,14 L35,22', fill: 'none', stroke: 'currentColor', 'stroke-width': 3 }],
+   ['z', SIN.z, 'Zona / área', { d: 'M8,12 L32,8 L35,30 L10,33 Z', fill: 'currentColor', 'fill-opacity': .18, stroke: 'currentColor', 'stroke-width': 2.5 }]].forEach(([k, tipo, nom, at]) => {
+    GRP[k + tipo] = '17. Líneas tácticas y zonas';
+    const g = document.createElementNS(NS, 'svg'); g.setAttribute('viewBox', '0 0 40 40'); g.style.color = color('Propio'); el(g, 'path', at);
+    boton(d, k + tipo, g, nom, () => armar(armed && armed.k === k ? null : { k, tipo, bando: 'Propio' }), false);
   });
 }
 $('calco-q').oninput = e => {

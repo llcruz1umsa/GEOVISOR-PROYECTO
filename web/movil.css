@@ -1,0 +1,40 @@
+/* Ajustes para celular y tableta (agregado por BYNS7, 05-11-2026). Se carga al final de index.html. */
+@media (max-width: 750px) {
+  /* encabezado: la barra de sesión baja a la fila de pestañas y deja libre el título */
+  .session-actions{top:auto!important;bottom:6px!important;right:6px!important;gap:5px!important;font-size:9px!important;z-index:30}
+  .session-actions > span{display:none!important}
+  .session-actions svg{display:none!important}
+  header h1{font-size:9.5px!important;line-height:1.2!important;letter-spacing:.04em!important;white-space:normal!important;max-width:calc(100vw - 150px)!important}
+  .session-actions button{font-size:9px!important;padding:4px 7px!important;white-space:nowrap}
+  .institution-tabs{left:8px!important;right:132px!important;width:auto!important;max-width:none!important;transform:none!important;
+    display:flex!important;flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+  .institution-tabs::-webkit-scrollbar{display:none}
+  .institution-tabs > *{flex:none!important;scroll-snap-align:start;font-size:10px!important;padding-inline:8px!important}
+  /* aviso de estado: no tapa la brújula */
+  .map > .legend{max-width:calc(100% - 175px)!important;white-space:normal!important;font-size:8.5px!important;line-height:1.25!important;padding:6px 10px!important}
+  /* pie del mapa: sin «mueve el cursor» (en pantalla táctil no hay cursor) y créditos compactos */
+  .topo-coord{display:none!important}
+  .basemap-credit{left:8px!important;right:auto!important;max-width:58%!important;bottom:6px!important;font-size:8px!important;line-height:1.2!important;padding:3px 7px!important}
+  /* paneles flotantes: a todo el ancho y con desplazamiento propio */
+  .rp-panel{left:8px!important;right:8px!important;width:auto!important;transform:none!important;bottom:8px!important;max-height:62vh!important;overflow:auto!important}
+  .rp-panel .rp-cab{position:sticky;top:0;z-index:2}
+  .cc-panel{left:8px!important;right:8px!important;width:auto!important;max-height:calc(100vh - 128px)!important}
+  .tt-zona{width:min(240px,calc(100% - 24px))!important;height:340px!important;right:8px!important}
+  .po-panel .po-def{grid-template-columns:repeat(2,1fr)!important}
+  .po-panel .po-modo button{font-size:8.5px!important}
+  .es-fondo{padding:8px 4px!important}
+  .es-cab{flex-wrap:wrap}
+  .es-tab{overflow-x:auto}
+  /* panel lateral: ocupa casi toda la pantalla cuando se abre */
+  main > aside{flex:0 0 calc(100vw - 62px)!important;width:calc(100vw - 62px)!important;max-width:none!important;box-sizing:border-box}
+  .sidebar-toggle[aria-expanded=true]{padding:9px!important}
+  .sidebar-toggle[aria-expanded=true] span{display:none}
+  main:has(> aside:not([hidden])) .map > :not(.sidebar-toggle):not(svg){visibility:hidden!important}
+}
+@media (pointer: coarse) {
+  /* botones y casillas más fáciles de tocar */
+  .pp-tab,.pp-cel,.visual-card,.cc-it,.cc-tarj,.fa-it{min-height:40px}
+  main > aside input[type=checkbox]{width:18px;height:18px}
+  .topo-coord{display:none!important}
+}

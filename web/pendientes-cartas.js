@@ -115,7 +115,7 @@ function tabla() {
   tr.append(tc, tn, h('td', 'p')); t.append(tr);
   ley.innerHTML = `<b class="t">PENDIENTES · MDT OMASUYOS (%)</b>` + CL.map((c, i) => `<div><i style="background:${c.color}"></i><span><b>${c.nombre}</b> · ${rango(i)}</span></div>`).join('')
     + (muOn ? `<div><i style="background:${RAYADO};border-color:${ROJO}"></i><span><b>Mancha urbana</b> · severamente restringido</span></div>` : '')
-    + '<div class="cur" id="pc-cur">Pasa el cursor sobre el mapa</div>';
+    + '<div class="cur" id="pc-cur">Pasa el cursor o toca el mapa</div>';
 }
 function guardar() { try { localStorage.setItem('emte-pend-pct', JSON.stringify(CL.slice(0, 2).map(c => c.max))); } catch (e) {} }
 
@@ -220,7 +220,7 @@ $('pc-ir').onclick = () => {
   const ir = () => {   // mismo vuelo que la consulta de cartas
     if (!META || typeof zoom !== 'function' || typeof scale !== 'number') return;
     const [ax, ay] = aEscena(META.nw[0], META.nw[1]), [bx, by] = aEscena(META.se[0], META.se[1]), cx = (ax + bx) / 2, cy = (ay + by) / 2;
-    const s1 = Math.max(.05, Math.min(480, Math.min(1000 / (bx - ax), 760 / (by - ay)) * .9));
+    const s1 = Math.max(.008, Math.min(480, Math.min(1000 / (bx - ax), 760 / (by - ay)) * .9));
     const s0 = scale, c0 = [500 - panX / s0, 380 - panY / s0], t0 = performance.now();
     const paso = t => {
       const k = Math.min(1, (t - t0) / 700), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
@@ -236,7 +236,10 @@ $('pc-ir').onclick = () => {
 
 /* lectura bajo el cursor */
 let raf = 0;
-scene.ownerSVGElement.addEventListener('pointermove', e => {
+// 11-11-2026: en tablet y celular no hay cursor: al TOCAR el mapa también se lee la pendiente de ese punto
+scene.ownerSVGElement.addEventListener('click', e => leerPendiente(e), true);
+scene.ownerSVGElement.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') leerPendiente(e); });
+function leerPendiente(e) {
   if (!on || !VAL || !img) return;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
@@ -253,7 +256,7 @@ scene.ownerSVGElement.addEventListener('pointermove', e => {
     const v = VAL[j * W + i], c = CL[claseDe(v)], g = GRADOS[v];
     cur.replaceChildren(); cur.append(document.createTextNode(`Pendiente ${v >= 250 ? 'más de 250' : v} % (${v >= 250 ? '>68' : dec(g, 0)}°) → `)); const b = h('span', null, c.nombre); b.style.color = c.color === '#E6C434' ? '#8a6d00' : c.color; cur.append(b);
   });
-});
+}
 
 tabla();
 /* Lectura de la pendiente MDT y de la mancha urbana en un punto (la usa el perfil topográfico de relieve.js) */

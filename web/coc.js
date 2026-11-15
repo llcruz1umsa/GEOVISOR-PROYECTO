@@ -431,7 +431,7 @@ $('coc-ir').onclick = () => {
     if (typeof zoom !== 'function') return;
     const b = S.ai || [DAT.meta.nw[0], DAT.meta.nw[1], DAT.meta.se[0], DAT.meta.se[1]];
     const [ax, ay] = aEscena(b[0], b[1]), [bx, by] = aEscena(b[2], b[3]), cx = (ax + bx) / 2, cy = (ay + by) / 2;
-    scale = Math.max(.05, Math.min(480, Math.min(1000 / Math.abs(bx - ax), 760 / Math.abs(by - ay)) * .85)); panX = (500 - cx) * scale; panY = (380 - cy) * scale; zoom(1);
+    scale = Math.max(.008, Math.min(480, Math.min(1000 / Math.abs(bx - ax), 760 / Math.abs(by - ay)) * .85)); panX = (500 - cx) * scale; panY = (380 - cy) * scale; zoom(1);
   });
 };
 tabla(); leyenda();

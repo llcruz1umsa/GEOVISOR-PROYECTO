@@ -25,10 +25,11 @@ const CAPAS = [
   { k: 'agua', nombre: 'Fuentes y obras de agua', color: '#1F78B4' }
 ];
 let D = null; const activas = new Set();
+const TAM = 1.3;   // 10-11-2026: símbolos un poco más grandes para que se reconozcan
 const gA = el(null, 'g', { id: 'topo-apoyo' });
 
 function simbolo(capa, f) {
-  const [x, y] = aEscena(f[2], f[1]), g = el(gA, 'g', { class: 'ap-s', 'data-x': x, 'data-y': y, transform: `translate(${x} ${y}) scale(${1 / scale})` });
+  const [x, y] = aEscena(f[2], f[1]), g = el(gA, 'g', { class: 'ap-s', 'data-x': x, 'data-y': y, transform: `translate(${x} ${y}) scale(${TAM / scale})` });
   g.innerHTML = window.EMTE_SIMBOLOS.apoyo(capa, f);
   g.addEventListener('click', e => { e.stopPropagation(); ficha(capa, f); });
   return g;
@@ -62,7 +63,7 @@ function ficha(capa, f) {
     F.poner(info, F.chips([[f[7] ? String(f[7]).toUpperCase() : null, /^apta/i.test(f[7] || '') ? 'si' : /restring/i.test(f[7] || '') ? 'med' : 'no']]));
     datos = [['Aptitud', f[7]], ['Tipo de terreno', f[3]], ['Deporte', f[4]], ['Superficie', f[5]], ['Dimensiones aprox.', f[6] ? `${f[6][0]} × ${f[6][1]} m (rectángulo envolvente)` : null]];
   }
-  if (capa === 'puentes') { F.poner(info, F.chips([[f[4] ? 'RUTA ' + f[4] : null, 'si'], [f[6] ? 'CARGA ' + f[6] + ' t' : null, 'med']])); datos = [['Vía', f[3]], ['Ruta', f[4]], ['Longitud aprox.', f[5] ? miles(f[5]) + ' m' : null], ['Carga máxima', f[6] ? f[6] + ' t' : null], ['Superficie', f[7]], ['Carriles', f[8]]]; }
+  if (capa === 'puentes') { F.poner(info, F.chips([[f[4] ? 'RUTA ' + f[4] : null, 'si'], [f[6] ? 'CARGA ' + f[6] + ' t' : null, 'med']])); datos = [['Vía', f[3]], ['Ruta', f[4]], ['Distancia aprox.', f[5] ? miles(f[5]) + ' m' : null], ['Carga máxima', f[6] ? f[6] + ' t' : null], ['Superficie', f[7]], ['Carriles', f[8]]]; }
   if (capa === 'agua') datos = [['Tipo de obra', f[3]]];
   const id = f[f.length - 1], tipo = { n: 'node', w: 'way', r: 'relation' }[id[0]];
   F.poner(info,
@@ -80,7 +81,7 @@ function casillas() {
     lab.append(cb, dot, document.createTextNode(c.nombre)); grupo.append(lab);
     cb.addEventListener('change', () => {
       if (cb.checked) activas.add(c.k); else activas.delete(c.k);
-      if (D) dibujar(); else fetch('data/planeamiento_apoyo.json').then(r => r.json()).then(d => { D = d; dibujar(); grupo.querySelectorAll('label').forEach((l, i) => { const n = D[CAPAS[i].k].length; if (!l.querySelector('small')) { const s = h('small', null, ' ' + n); s.style.cssText = 'margin-left:auto;color:#5A6B80;font-size:10px'; l.append(s); } }); }).catch(() => {});
+      if (D) dibujar(); else fetch('data/planeamiento_apoyo.json').then(r => r.json()).then(d => { D = d; dibujar(); grupo.querySelectorAll('label').forEach(l => { const cc = CAPAS.find(c => l.textContent.trim().startsWith(c.nombre)); if (!cc) return; const n = D[cc.k].length; if (!l.querySelector('small')) { const s = h('small', null, ' ' + n); s.style.cssText = 'margin-left:auto;color:#5A6B80;font-size:10px'; l.append(s); } }); }).catch(() => {});
     });
   }
   capas.append(grupo);
@@ -92,7 +93,7 @@ const zoomAnterior = zoom;
 zoom = function (f) {
   zoomAnterior(f);
   if (!activas.size) return;
-  const s = 1 / scale; gA.querySelectorAll('.ap-s').forEach(g => g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`));
+  const s = TAM / scale; gA.querySelectorAll('.ap-s').forEach(g => g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`));
   clearTimeout(zoom._ap); zoom._ap = setTimeout(etiquetas, 120);
 };
 });

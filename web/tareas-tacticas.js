@@ -6,7 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
 'use strict';
 const map = document.querySelector('.map');
 if (!map) return;
-const COLOR = { amigas: '#45999f', terreno: '#ffff00', enemigo: '#ff1f1f' };
+// colores del Llavero táctico (clasificación de las tareas tácticas): cada tarea lleva el color de su grupo (05-11-2026)
+const COLOR = { amigas: '#4597a0', terreno: '#ffff00', enemigo: '#ff0000' };
 const GRUPO = { amigas: 'Acciones ejecutadas por las fuerzas amigas', terreno: 'Efectos sobre el terreno', enemigo: 'Efectos sobre el enemigo' };
 let T = new Map();
 
@@ -34,7 +35,19 @@ css.textContent = `
 .tt-ctl{position:absolute;top:-38px;right:0;display:flex;gap:6px}
 .tt-ctl button{border:1px solid #b28405;background:#070774;color:#fff;border-radius:16px;padding:5px 11px;font:600 11px system-ui;cursor:pointer;box-shadow:0 2px 8px #0004}
 .tt-ctl button:hover{background:#12129a}
-@media(max-width:750px){.tt-zona{right:50%;transform:translateX(50%);top:auto;bottom:150px;width:230px;height:318px}}`;
+@media(max-width:750px){.tt-zona{right:50%;transform:translateX(50%);top:auto;bottom:150px;width:230px;height:318px}}
+/* 10-11-2026: carta más pequeña para que no tape el mapa */
+.tt-zona{width:205px;height:300px}
+.tt-cara{border-width:4px;border-radius:8px}
+.tt-num{width:36px;height:31px;border-width:3px;font-size:15px}
+.tt-tit{margin:18px 38px 0 10px;font-size:13px;min-height:32px}
+.tt-panel{left:9px;right:9px;bottom:9px;top:64px}
+.tt-dorso .cuerpo{padding:8px 10px 10px;font-size:9.5px;line-height:1.3}
+.tt-dorso h4{font-size:11px}.tt-dorso h5{font-size:9.5px;margin:6px 0 2px}
+.tt-dorso li{padding-left:12px}.tt-dorso li::before{width:6px;height:6px}
+.tt-dorso .cat{font-size:8.5px;padding:4px 8px}
+.tt-ctl{top:-32px}.tt-ctl button{padding:4px 9px;font-size:10px}
+@media(max-width:750px){.tt-zona{width:170px;height:250px}}`;
 document.head.append(css);
 
 const zona = document.createElement('section'); zona.className = 'tt-zona'; zona.hidden = true; zona.setAttribute('aria-label', 'Carta de la tarea táctica');
@@ -68,7 +81,7 @@ function mostrar(n) {
   $('tt-num').textContent = t.n; $('tt-tit').textContent = t.nombre.toUpperCase();
   const pnl = $('tt-panel'); pnl.style.background = COLOR[t.color]; pnl.innerHTML = `<svg viewBox="0 0 200 200" aria-hidden="true">${t.svg}</svg>`;
   $('tt-cat').textContent = 'TAREA TÁCTICA ' + t.n + ' · ' + GRUPO[t.cat].toUpperCase(); $('tt-cat').style.background = COLOR[t.cat];
-  $('tt-cat').style.color = t.cat === 'terreno' ? '#111' : '#fff';
+  $('tt-cat').style.color = t.cat === 'terreno' ? '#111' : '#fff'; $('tt-panel').style.background = COLOR[t.cat];
   const d = $('tt-dorso'); d.replaceChildren();
   const h = document.createElement('h4'); h.textContent = t.nombre.toUpperCase(); d.append(h);
   const hp = document.createElement('h5'); hp.textContent = 'PROPÓSITO'; const p = document.createElement('p'); p.textContent = t.prop; d.append(hp, p);
@@ -99,6 +112,8 @@ function limpiarCatalogo() {
   document.querySelectorAll('#calco-cat details > summary').forEach(s => {
     if (/^Tareas tácticas/.test(s.textContent)) {
       s.querySelector('.calco-pag')?.remove(); s.parentElement.classList.add('tt-grupo');
+      const g = /amigas/i.test(s.textContent) ? 'amigas' : /terreno/i.test(s.textContent) ? 'terreno' : /enemigo/i.test(s.textContent) ? 'enemigo' : null;
+      if (g && !s.querySelector('.tt-dot')) { const i = document.createElement('i'); i.className = 'tt-dot'; i.style.cssText = `display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px;border:1px solid #0003;background:${COLOR[g]}`; i.title = GRUPO[g]; s.prepend(i); }
     }
   });
   // color de cada tarea según su grupo del llavero (amigas, terreno, enemigo), tomado de la propia tarea:

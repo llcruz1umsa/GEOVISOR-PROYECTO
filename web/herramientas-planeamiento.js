@@ -113,7 +113,7 @@ const mensaje = (c, t, err) => { let m = c.querySelector(':scope > .hp-msg.dyn')
 /* ---------- datos compartidos ---------- */
 let COC = null;   // {meta, fz:{mec,inf,aer}: Uint8Array w*h}
 function cargarImg(url) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; }); }
-async function rasterGris(url) { const i = await cargarImg(url), cv = document.createElement('canvas'); cv.width = i.naturalWidth; cv.height = i.naturalHeight; const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(i, 0, 0); const d = c.getImageData(0, 0, cv.width, cv.height).data, o = new Uint8Array(cv.width * cv.height); for (let k = 0; k < o.length; k++) o[k] = d[k * 4]; return { w: cv.width, h: cv.height, v: o }; }
+async function rasterGris(url, max) { const i = await cargarImg(url), cv = document.createElement('canvas'), k = max && Math.max(i.naturalWidth, i.naturalHeight) > max ? max / Math.max(i.naturalWidth, i.naturalHeight) : 1; cv.width = Math.round(i.naturalWidth * k); cv.height = Math.round(i.naturalHeight * k); const c = cv.getContext('2d', { willReadFrequently: true }); c.imageSmoothingEnabled = false; c.drawImage(i, 0, 0, cv.width, cv.height); /* 10-11-2026: en tablet/celular se reduce (sin mezclar clases) */ const d = c.getImageData(0, 0, cv.width, cv.height).data, o = new Uint8Array(cv.width * cv.height); for (let k = 0; k < o.length; k++) o[k] = d[k * 4]; return { w: cv.width, h: cv.height, v: o }; }
 async function cargarCOC() {
   if (COC) return COC;
   const meta = await fetch('data/coc_omasuyos.json').then(r => r.json());
@@ -121,7 +121,7 @@ async function cargarCOC() {
   COC = { meta, fz }; return COC;
 }
 let CUB = null;
-async function cargarCub() { if (CUB) return CUB; const meta = await fetch('data/cubierta_omasuyos.json').then(r => r.json()); const r = await rasterGris('data/cubierta_omasuyos.png'); CUB = { meta, ...r }; return CUB; }
+async function cargarCub() { if (CUB) return CUB; const meta = await fetch('data/cubierta_omasuyos.json').then(r => r.json()); const r = await rasterGris('data/cubierta_omasuyos.png', matchMedia('(pointer:coarse)').matches ? 3200 : 0); CUB = { meta, ...r }; return CUB; }
 const merc = (lon, lat) => [RT * lon * D2R, RT * Math.log(Math.tan(Math.PI / 4 + lat * D2R / 2))];
 function muestraCub(ll) { if (!CUB) return null; const [X0, Y0] = merc(...CUB.meta.nw), [X1, Y1] = merc(...CUB.meta.se), [x, y] = merc(ll[0], ll[1]); const i = Math.floor((x - X0) / (X1 - X0) * CUB.w), j = Math.floor((Y0 - y) / (Y0 - Y1) * CUB.h); if (i < 0 || j < 0 || i >= CUB.w || j >= CUB.h) return null; const v = CUB.v[j * CUB.w + i]; return v === 255 ? null : v; }
 let TC = null; const cargarTC = () => TC ? Promise.resolve(TC) : fetch('data/terreno_clave_omasuyos.geojson').then(r => r.json()).then(d => TC = d).catch(() => (TC = { features: [] }));
@@ -137,121 +137,283 @@ const COLOR_CAT = { 'Muy favorable': '#1E8B4C', 'Favorable': '#7CB342', 'Poco fa
 const COLOR_AA = ['#0033cc', '#7B2CBF', '#00838F'];
 (function avenidas() {
   const c = seccion('aa', 'Avenidas de aproximación', '3 rutas evaluadas');
-  c.innerHTML = `<p>Marca la <b>zona de partida</b> y el <b>objetivo</b>. Se buscan <b>3 avenidas</b> distintas sobre el COC (obstáculos combinados) y la red vial, y cada una se evalúa: transitabilidad, obstáculos, cuellos de botella, ancho del corredor, encubrimiento, terreno clave y tiempo. Luego se categorizan.</p>`;
-  const fz = sel([['mec', FZ.mec.t], ['inf', FZ.inf.t]], 'mec'), es = sel(Object.entries(ESCALON).map(([k, v]) => [k, v[0] + ' (corredor ≥ ' + miles(v[1]) + ' m)']), 'bat');
+  c.innerHTML = `<p>Puedes calcular <b>varias avenidas numeradas</b> (N.º 1, 2, 3…), cada una con su <b>partida</b> y su <b>objetivo</b>. Para cada una se calculan <b>3 rutas distintas</b> (AA-1, AA-2, AA-3) y se evalúan: tiempo, desnivel, pendientes, obstáculos, cuellos de botella, ancho del corredor, encubrimiento y terreno clave. Si quieres que pase por lugares obligados, activa <b>puntos de paso</b>. <b>A pie</b>, la ruta busca el menor tiempo de marcha según el relieve de las curvas de nivel IGM y la pendiente.</p>`;
+  // ---------- estado: lista de avenidas numeradas ----------
+  let G = LS.get('aa-lista', null);
+  if (!G || !Array.isArray(G.L) || !G.L.length) {   // primera vez: se toma lo que había
+    const pts = LS.get('aa-pts', null), r = ESTADO.aa;
+    G = { act: 0, todas: true, L: [{ A: pts?.A || r?.A || null, B: pts?.B || r?.B || null, M: pts?.M || r?.puntos?.slice(1, -1) || [], paso: !!(pts?.M?.length || r?.puntos?.length > 2), fz: LS.get('aa-fz', 'inf'), es: LS.get('aa-es', 'bat'), r: r || null }] };
+  }
+  G.act = Math.min(Math.max(0, G.act | 0), G.L.length - 1);
+  const cur = () => G.L[G.act];
+  const nueva = () => ({ A: null, B: null, M: [], paso: false, fz: cur()?.fz || 'inf', es: cur()?.es || 'bat', r: null });
+  const guardar = () => { LS.set('aa-lista', G); ESTADO.aa = cur().r || null; LS.set('aa', ESTADO.aa); };
+  // ---------- controles ----------
+  const chips = h('div', 'aa-chips'); c.append(chips);
+  const cab = h('div', 'aa-cab'); c.append(cab);
+  const fz = sel([['inf', FZ.inf.t + ' (marcha)'], ['mec', FZ.mec.t]], 'inf'), es = sel(Object.entries(ESCALON).map(([k, v]) => [k, v[0] + ' (corredor ≥ ' + miles(v[1]) + ' m)']), 'bat');
+  fz.onchange = () => { cur().fz = fz.value; guardar(); }; es.onchange = () => { cur().es = es.value; guardar(); };
   const f1 = h('div', 'fila'); f1.append(rotulo('FUERZA', fz), rotulo('ESCALÓN QUE AVANZA', es)); c.append(f1);
-  let A = null, B = null;
-  const bA = boton('① Zona de partida', () => elegir('Toca el mapa en la zona de partida (zona de reunión)', ll => { A = ll; pintarPts(); }));
-  const bB = boton('② Objetivo', () => elegir('Toca el mapa en el objetivo', ll => { B = ll; pintarPts(); }));
-  const bC = boton('CALCULAR 3 AVENIDAS', () => calcular(), 'pri');
-  const fb = h('div', 'hp-b'); fb.append(bA, bB); c.append(fb); const fb2 = h('div', 'hp-b'); fb2.append(bC, boton('Limpiar', limpiarAA)); c.append(fb2);
+  const bA = boton('① Partida', () => elegir(`Avenida N.º ${G.act + 1}: toca el mapa en la zona de partida`, ll => { cur().A = ll; cambio(); }));
+  const bB = boton('② Objetivo', () => elegir(`Avenida N.º ${G.act + 1}: toca el mapa en el objetivo`, ll => { cur().B = ll; cambio(); }));
+  const fb = h('div', 'hp-b'); fb.append(bA, bB); c.append(fb);
+  const lPaso = h('label'), cbPaso = h('input'); cbPaso.type = 'checkbox'; lPaso.append(cbPaso, document.createTextNode('Agregar puntos de paso (opcional)')); c.append(lPaso);
+  cbPaso.onchange = () => { cur().paso = cbPaso.checked; cambio(); };
+  const bM = boton('＋ Punto de paso', () => { elegir(`Avenida N.º ${G.act + 1}: toca el mapa en cada punto de paso, en orden`, ll => { cur().M.push(ll); cambio(); }, true); eleccion.fin = () => cambio(); });
+  const fbM = h('div', 'hp-b'); fbM.append(bM); c.append(fbM);
+  const tabPts = h('div', 'hp-lista'); c.append(tabPts);
+  const bC = boton('CALCULAR 3 RUTAS', () => calcular([G.act]), 'pri'), bT = boton('CALCULAR TODAS', () => calcular(G.L.map((_, i) => i)));
+  const fb2 = h('div', 'hp-b'); fb2.append(bC, bT, boton('Limpiar esta', () => { if (!confirm(`¿Borrar los puntos y las rutas de la avenida N.º ${G.act + 1}?`)) return; Object.assign(cur(), { A: null, B: null, M: [], r: null }); cambio(); })); c.append(fb2);
+  const lTodas = h('label'), cbTodas = h('input'); cbTodas.type = 'checkbox'; lTodas.append(cbTodas, document.createTextNode('Mostrar en el mapa todas las avenidas numeradas')); c.append(lTodas);
+  cbTodas.onchange = () => { G.todas = cbTodas.checked; guardar(); dibujar(); };
   const res = h('div'); res.style.cssText = 'display:grid;gap:8px'; c.append(res);
+  const css2 = h('style'); css2.textContent = `.aa-chips{display:flex;flex-wrap:wrap;gap:5px}
+.aa-chips button{display:flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid #C9D1DE;border-radius:16px;background:#fff;color:#12294A;font:800 10.5px var(--tipo-titulo,system-ui);letter-spacing:.04em;cursor:pointer}
+.aa-chips button.on{background:#0B1D33;color:#fff;border-color:#0B1D33}.aa-chips button i{font-style:normal;font-size:9px;color:#1E8B4C}.aa-chips button.on i{color:#7DDBA0}
+.aa-chips button.mas{border-style:dashed;color:#8A6D2F;border-color:#B79A5B}
+.aa-cab{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:linear-gradient(135deg,#0B1D33,#1C3A66);color:#fff;font:800 11.5px var(--tipo-titulo,system-ui);letter-spacing:.08em}
+.aa-ojo{border:0;border-radius:50%;width:24px;height:24px;flex:none;background:#fff;color:#0B1D33;font-size:12px;cursor:pointer;line-height:1;padding:0}.aa-ojo.off{background:#ffffff40;color:#fff}
+.aa-cab span{flex:1}.aa-cab small{font-weight:600;letter-spacing:0;color:#E2CB8E}.aa-cab button{border:0;background:#ffffff1f;color:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-weight:800}`;
+  document.head.append(css2);
   const gP = sv(sub.aa, 'g', {});
-  function pintarPts() { ponerCapa(); gP.replaceChildren(); if (A) marca(gP, A, 'PARTIDA', '#0B1D33'); if (B) marca(gP, B, 'OBJETIVO', '#C0392B'); bC.disabled = !(A && B); }
-  pintarPts();
-  function limpiarAA() { A = B = null; ESTADO.aa = null; LS.set('aa', null); sub.aa.replaceChildren(gP); res.replaceChildren(); c.querySelector('.hp-msg.dyn')?.remove(); pintarPts(); }
+  const lista = A => [A.A, ...(A.paso ? A.M : []), A.B];
+  const etiqueta = (i, n, k) => i === 0 ? 'PARTIDA ' + k : i === n - 1 ? 'OBJETIVO ' + k : `P${i} (N.º ${k})`;
+  function cambio() { guardar(); pintarPanel(); dibujar(); }
+  function pintarPanel() {
+    chips.replaceChildren();
+    G.L.forEach((A, i) => { const b = h('button', i === G.act ? 'on' : ''); b.type = 'button'; b.append(document.createTextNode('N.º ' + (i + 1))); if (A.r) b.append(h('i', null, '✔')); b.title = A.r ? 'Rutas calculadas' : 'Sin calcular'; b.onclick = () => { G.act = i; guardar(); pintarPanel(); dibujar(); }; chips.append(b); });
+    const mas = h('button', 'mas', '＋ NUEVA AVENIDA'); mas.type = 'button'; mas.onclick = () => { G.L.push(nueva()); G.act = G.L.length - 1; cambio(); }; chips.append(mas);
+    const A = cur(); cab.replaceChildren();
+    const t = h('span', null, `AVENIDA DE APROXIMACIÓN N.º ${G.act + 1} `); t.append(h('small', null, A.r ? `· ${A.r.rutas.length} rutas calculadas` : '· sin calcular')); cab.append(t);
+    if (G.L.length > 1) { const x = h('button', null, '✕'); x.type = 'button'; x.title = 'Borrar esta avenida'; x.onclick = () => { if (!confirm(`¿Borrar la avenida N.º ${G.act + 1}? Las siguientes se renumeran.`)) return; G.L.splice(G.act, 1); G.act = Math.max(0, G.act - 1); cambio(); }; cab.append(x); }
+    fz.value = A.fz || 'inf'; es.value = A.es || 'bat'; cbPaso.checked = !!A.paso; fbM.style.display = A.paso ? '' : 'none'; cbTodas.checked = G.todas !== false;
+    tabPts.replaceChildren(); const L = lista(A), n = L.length;
+    L.forEach((p, i) => {
+      const d = h('div', 'hp-it'), col = i === 0 ? '#0B1D33' : i === n - 1 ? '#C0392B' : '#B7791F';
+      const tt = h('b'); tt.innerHTML = `<span style="color:${col}">${i === 0 ? 'PARTIDA' : i === n - 1 ? 'OBJETIVO' : 'PUNTO DE PASO ' + i}</span> <small style="font-weight:600;color:#5A6B80">${p ? esc(utm(p[0], p[1])) : 'sin marcar'}</small>`; d.append(tt);
+      if (i > 0 && i < n - 1) {
+        const m = i - 1, mv = (txt, ti, fn) => { const b = h('button', null, txt); b.type = 'button'; b.title = ti; b.style.color = '#12294A'; b.onclick = fn; d.append(b); };
+        if (m > 0) mv('↑', 'Subir', () => { [A.M[m - 1], A.M[m]] = [A.M[m], A.M[m - 1]]; cambio(); });
+        if (m < A.M.length - 1) mv('↓', 'Bajar', () => { [A.M[m + 1], A.M[m]] = [A.M[m], A.M[m + 1]]; cambio(); });
+        const x = h('button', null, '✕'); x.type = 'button'; x.title = 'Quitar este punto de paso'; x.onclick = () => { A.M.splice(m, 1); cambio(); }; d.append(x);
+      }
+      tabPts.append(d);
+    });
+    bC.disabled = !(A.A && A.B); bC.textContent = `CALCULAR 3 RUTAS (N.º ${G.act + 1})`; bT.hidden = G.L.length < 2; bT.disabled = !G.L.some(x => x.A && x.B);
+    if (A.r) tarjetas(A.r); else res.replaceChildren();
+  }
+  function dibujar() {   // puntos y rutas de todas las avenidas (la elegida resaltada)
+    ponerCapa(); [...sub.aa.children].forEach(e => { if (e !== gP) e.remove(); }); if (!gP.isConnected) sub.aa.prepend(gP); gP.replaceChildren();
+    const mostrar = G.L.map((A, i) => [A, i]).filter(([, i]) => G.todas !== false || i === G.act);
+    mostrar.forEach(([A, i]) => { if (A.r) dibujarAA(A.r, sub.aa, G.L.length > 1 ? (i + 1) + '·' : '', i === G.act ? 1 : .5, A.ocultas || []); });
+    mostrar.forEach(([A, i]) => {
+      const L = lista(A), n = L.length, ok = L.filter(Boolean), op = i === G.act ? 1 : .55;
+      const g = sv(gP, 'g', { opacity: op });
+      if (ok.length > 1 && !A.r) { const pts = ok.map(p => aEscena(p[0], p[1])); sv(g, 'path', { d: 'M' + pts.map(p => p.join(' ')).join('L'), fill: 'none', stroke: '#0B1D33', 'stroke-width': 1.2, 'stroke-dasharray': '3 5', 'stroke-opacity': .6, 'vector-effect': 'non-scaling-stroke' }); }
+      L.forEach((p, j) => { if (p) marca(g, p, etiqueta(j, n, i + 1), j === 0 ? '#0B1D33' : j === n - 1 ? '#C0392B' : '#B7791F', j > 0 && j < n - 1 ? 'po' : 'c'); });
+    });
+  }
+  SECC.aa?.addEventListener('toggle', () => { if (SECC.aa.open) { pintarPanel(); dibujar(); } });
+  function limpiarAA() { G = { act: 0, todas: true, L: [nueva()] }; guardar(); res.replaceChildren(); c.querySelector('.hp-msg.dyn')?.remove(); pintarPanel(); dibujar(); }
   LIMPIEZA.push(limpiarAA);
-  async function calcular() {
-    if (!(A && B)) return;
-    mensaje(c, 'Calculando avenidas… (cargando las pendientes MDT de toda la provincia)');
-    let C; try { const PM = window.EMTE_PENDIENTES_MDT; if (!PM) throw new Error('sin pendientes'); await PM.cargar(); C = PM.datos(); if (!C) throw new Error('sin pendientes'); await cargarTC(); await cargarAgua(); await cargarCub().catch(() => null); } catch (e) { mensaje(c, 'No se pudieron cargar las pendientes de transitabilidad (data/pendientes_cartas.png).', true); return; }
-    setTimeout(() => {
-      try { const r = avenidasAB(C, fz.value, es.value, A, B); if (!r) { mensaje(c, 'El punto de partida o el objetivo está fuera de Omasuyos o sobre agua.', true); return; }
-        ESTADO.aa = r; LS.set('aa', r); dibujarAA(r); tarjetas(r); c.querySelector('.hp-msg.dyn')?.remove(); window.EMTE_HP_EVENTO?.('aa'); }
-      catch (e) { console.error(e); mensaje(c, 'No se pudo calcular: ' + e.message, true); }
-    }, 30);
+  async function calcular(indices) {
+    indices = indices.filter(i => G.L[i]?.A && G.L[i]?.B); if (!indices.length) return;
+    mensaje(c, 'Calculando… (pendientes MDT y modelo de elevación de toda la provincia)');
+    let C, D = null; try {
+      const PM = window.EMTE_PENDIENTES_MDT; if (!PM) throw new Error('sin pendientes'); await PM.cargar(); C = PM.datos(); if (!C) throw new Error('sin pendientes');
+      await Promise.all([cargarTC(), cargarAgua(), cargarRios(), cargarCub().catch(() => null)]);
+      if (window.EMTE_CARGAR_DEM) { await window.EMTE_CARGAR_DEM(); D = window.EMTE_DEM(); }
+    } catch (e) { mensaje(c, 'No se pudieron cargar las pendientes de transitabilidad o el modelo de elevación.', true); return; }
+    const fallas = []; let motivo = '';
+    for (const i of indices) {
+      const A = G.L[i]; mensaje(c, `Calculando la avenida N.º ${i + 1}…`); await new Promise(r => setTimeout(r, 30));
+      if (A.fz === 'inf' && !D) { fallas.push(i + 1); continue; }
+      try { const r = avenidasRuta(C, D, A.fz || 'inf', A.es || 'bat', lista(A).filter(Boolean)); if (r && r.error) { fallas.push(i + 1); motivo = r.error; } else if (r) { r.n = i + 1; A.r = r; A.ocultas = []; } else fallas.push(i + 1); }
+      catch (e) { console.error(e); fallas.push(i + 1); }
+    }
+    guardar(); pintarPanel(); dibujar(); window.EMTE_HP_EVENTO?.('aa');
+    if (fallas.length) mensaje(c, `No se pudo calcular la avenida N.º ${fallas.join(', ')}: ${motivo || 'algún punto está fuera de Omasuyos, sobre agua, o no hay paso entre ellos.'}`, true); else c.querySelector('.hp-msg.dyn')?.remove();
   }
   function tarjetas(r) {
     res.replaceChildren();
-    const resumen = h('div', 'hp-msg'); resumen.innerHTML = `<b>${FZ[r.fz].t} · ${ESCALON[r.esc][0]}</b> · distancia directa ${dec(r.directa)} km` + (r.base === 'pendientes' ? ` · pendientes MDT (sin restricción hasta ${r.umbrales?.[0] ?? 30} %)` : '') + (r.sinVerde ? `<br><b style="color:#9B1C1C">No hay paso solo por terreno sin restricción entre estos puntos:</b> solo se calculó la avenida que admite terreno restringido.` : ''); res.append(resumen);
+    const pie = r.fz === 'inf', resumen = h('div', 'hp-msg');
+    resumen.innerHTML = `<b>N.º ${G.act + 1} · ${FZ[r.fz].t} · ${ESCALON[r.esc][0]}</b> · distancia directa ${dec(r.directa)} km${r.puntos?.length > 2 ? ` · ${r.puntos.length - 2} punto(s) de paso` : ''}` +
+      (pie ? '<br><b>AA-1</b> casi recta (la más directa) · <b>AA-2</b> sin pasar por zonas restringidas · <b>AA-3</b> la más factible según las curvas de nivel IGM (subidas, bajadas y pendiente).' : '<br>Mecanizada: <b>AA-1</b> y <b>AA-2</b> solo por terreno sin restricción (pendiente ≤ ' + (r.umbrales?.[0] ?? 30) + ' %), por corredores distintos · <b>AA-3</b> admite terreno restringido con mayor costo (más directa).') + '<br>Ninguna ruta pasa por poblaciones (mancha urbana: severamente restringido).' +
+      (r.sinVerde ? `<br><b style="color:#9B1C1C">No hay paso solo por terreno sin restricción entre estos puntos:</b> ${pie ? 'la AA-2 cruza lo mínimo posible de terreno restringido.' : 'las rutas admiten terreno restringido.'}` : '') +
+      (r.rutas.length < 3 ? `<br><b style="color:#9B1C1C">Solo se encontraron ${r.rutas.length} ruta(s) distinta(s):</b> el terreno no deja otro corredor.` : '');
+    res.append(resumen);
     r.rutas.forEach((R, i) => {
-      const d = h('div', 'hp-ruta'), cab = h('div', 'cab'), dot = h('i'); dot.style.background = COLOR_AA[i];
-      cab.append(dot, h('b', null, `AA-${i + 1} · ${R.rol}`), h('span', null, R.cat + ' · ' + R.puntaje));
-      if (R.tipo) { const tg = h('em', 'hp-tipo', R.tipo === 'verde' ? 'SOLO SIN RESTRICCIÓN' : 'ADMITE RESTRINGIDO'); tg.style.cssText = `display:block;flex-basis:100%;margin:2px 0 0 18px;font:800 9.5px var(--tipo-titulo,system-ui);letter-spacing:.08em;font-style:normal;color:${R.tipo === 'verde' ? '#1E8B4C' : '#B7791F'}`; cab.style.flexWrap = 'wrap'; cab.append(tg); } cab.querySelector('span').style.background = COLOR_CAT[R.cat]; cab.querySelector('span').style.color = '#fff';
-      const t = h('table'); const pc = R.pct;
-      t.innerHTML = (R.tipo ? `<tr><td>Criterio</td><td>${R.tipo === 'verde' ? 'Solo terreno sin restricción (verde): no entra en zonas restringidas, severamente restringidas ni en la mancha urbana' : 'Puede cruzar terreno restringido (amarillo) y, si no hay otra salida, severamente restringido (rojo), con mayor costo'}${R.ajuste ? ` · parte/llega al terreno verde más cercano (${miles(R.ajuste)} m)` : ''}</td></tr>` : '') + `<tr><td>Longitud</td><td>${dec(R.km)} km (${dec(R.km / r.directa, 2)} × la directa)</td></tr>
-<tr><td>Tiempo estimado</td><td>${R.horas >= 1 ? dec(R.horas) + ' h' : miles(R.horas * 60) + ' min'} <small>(${FZ[r.fz].vel.join(' / ')} km/h según clase)</small></td></tr>
-<tr><td>Transitabilidad</td><td>${dec(pc[0], 0)} % sin restricción · ${dec(pc[1], 0)} % restringido · ${dec(pc[2], 0)} % sev. restringido<div class="hp-barra"><span style="width:${pc[0]}%;background:#2E8B47"></span><span style="width:${pc[1]}%;background:#E3B23C"></span><span style="width:${pc[2]}%;background:#C0392B"></span></div></td></tr>
-<tr><td>Sobre vías</td><td>${dec(R.pctVia, 0)} % del recorrido</td></tr>
-<tr><td>Obstáculos cruzados</td><td>${R.obst} (ríos, quebradas o zonas severamente restringidas)</td></tr>
-<tr><td>Ancho del corredor</td><td>mínimo ${miles(R.anchoMin)} m · ${dec(R.pctAncho, 0)} % del tramo admite ${ESCALON[r.esc][0].toLowerCase()}</td></tr>
-<tr><td>Cuellos de botella</td><td>${R.cuellos.length ? R.cuellos.length + ' (marcados con ✕ en el mapa)' : 'ninguno'}</td></tr>
-<tr><td>Encubrimiento</td><td>${R.encub == null ? 'sin dato' : dec(R.encub, 0) + ' % del recorrido con vegetación densa, edificado o quebrada'}</td></tr>
-<tr><td>Terreno clave a ≤ 1 km</td><td>${R.tc.length ? R.tc.map(esc).join(', ') : 'ninguno'}</td></tr>
-<tr><td>Evaluación</td><td>${R.notas.map(esc).join(' · ')}</td></tr>`;
-      d.append(cab, t); cab.onclick = () => t.hidden = !t.hidden; res.append(d);
+      const d = h('div', 'hp-ruta'), cb = h('div', 'cab'), dot = h('i'); dot.style.background = COLOR_AA[i];
+      const A0 = cur(), apagada = (A0.ocultas || []).includes(i), ojo = h('button', 'aa-ojo' + (apagada ? ' off' : ''), apagada ? '⊘' : '👁'); ojo.type = 'button'; ojo.title = (apagada ? 'Encender' : 'Apagar') + ` AA-${i + 1} en el mapa`;
+      ojo.onclick = e => { e.stopPropagation(); const L = new Set(A0.ocultas || []); L.has(i) ? L.delete(i) : L.add(i); A0.ocultas = [...L]; guardar(); tarjetas(A0.r); dibujar(); };
+      if (apagada) d.style.opacity = .55;
+      cb.append(ojo, dot, h('b', null, `AA-${i + 1} · ${R.rol}`), h('span', null, R.cat + ' · ' + R.puntaje));
+      const TAG = { recta: ['CASI RECTA · LA MÁS DIRECTA', '#0033cc'], verde: ['SIN ZONAS RESTRINGIDAS', '#1E8B4C'], verdeMin: ['MÍNIMO TERRENO RESTRINGIDO', '#B7791F'], restringido: ['ADMITE RESTRINGIDO', '#B7791F'], pie: ['SEGÚN CURVAS DE NIVEL · MÁS FACTIBLE', '#7B2CBF'] }[R.tipo];
+      if (TAG) { const tg = h('em', 'hp-tipo', TAG[0]); tg.style.cssText = `display:block;flex-basis:100%;margin:2px 0 0 18px;font:800 9.5px var(--tipo-titulo,system-ui);letter-spacing:.08em;font-style:normal;color:${TAG[1]}`; cb.style.flexWrap = 'wrap'; cb.append(tg); }
+      cb.querySelector('span').style.background = COLOR_CAT[R.cat]; cb.querySelector('span').style.color = '#fff';
+      const t = h('table'), pc = R.pct, tiempo = x => x >= 1 ? dec(x) + ' h' : miles(x * 60) + ' min';
+      const crit = R.tipo === 'pie' ? 'La más factible según las curvas de nivel: menor tiempo de marcha a pie subiendo y bajando (función de Tobler) y según la pendiente de cada tramo'
+        : R.tipo === 'recta' ? 'Casi recta: la menor distancia entre los puntos; solo rodea el agua y las laderas muy empinadas'
+        : R.tipo === 'verdeMin' ? 'No existe paso continuo solo por terreno sin restricción: cruza lo mínimo posible de terreno restringido y severamente restringido'
+        : R.tipo === 'verde' ? 'Solo terreno sin restricción (verde): no entra en zonas restringidas, severamente restringidas ni en la mancha urbana' : 'Puede cruzar terreno restringido (amarillo) y, si no hay otra salida, severamente restringido (rojo), con mayor costo';
+      void crit;   // 04-11-2026: en cada AA solo longitud, tiempo (sin descansos) con la velocidad media, y obstáculos cruzados
+      const vm = R.horas > 0 ? R.km / R.horas : 0;
+      t.innerHTML = `<tr><td>Distancia</td><td><b>${dec(R.km)} km</b></td></tr>
+<tr><td>Tiempo estimado</td><td><b>${tiempo(R.horas)}</b> sin descansos · velocidad media <b>${dec(vm)} km/h</b></td></tr>
+<tr><td>Obstáculos cruzados</td><td><b>${R.obst}</b> (ríos o tramos severamente restringidos)</td></tr>`;
+      d.append(cb, t); cb.onclick = () => t.hidden = !t.hidden; res.append(d);
     });
-    const fb3 = h('div', 'hp-b'); fb3.append(boton('Descargar evaluación (CSV)', () => descargar('avenidas_aproximacion.csv', csv([['Avenida', 'Rol', 'Categoría', 'Puntaje', 'Longitud km', 'Tiempo h', '% sin restricción', '% restringido', '% sev. restringido', '% sobre vías', 'Obstáculos', 'Ancho mínimo m', 'Cuellos', 'Encubrimiento %', 'Terreno clave'], ...r.rutas.map((R, i) => ['AA-' + (i + 1), R.rol, R.cat, R.puntaje, dec(R.km), dec(R.horas), dec(R.pct[0], 0), dec(R.pct[1], 0), dec(R.pct[2], 0), dec(R.pctVia, 0), R.obst, R.anchoMin, R.cuellos.length, R.encub == null ? '' : dec(R.encub, 0), R.tc.join(', ')])]), 'text/csv'))); res.append(fb3);
+    const filas = G.L.flatMap((A, k) => (A.r?.rutas || []).map((R, i) => ['N.º ' + (k + 1), 'AA-' + (i + 1), R.rol, R.cat, R.puntaje, dec(R.km), dec(R.horas), R.horasAltos != null ? dec(R.horasAltos) : '', R.subida ?? '', R.bajada ?? '', R.pendMedia != null ? dec(R.pendMedia, 0) : '', R.pendMax != null ? dec(R.pendMax, 0) : '', dec(R.pct[0], 0), dec(R.pct[1], 0), dec(R.pct[2], 0), dec(R.pctVia, 0), R.obst, R.anchoMin, R.cuellos.length, R.encub == null ? '' : dec(R.encub, 0), R.tc.join(', ')]));
+    const fb3 = h('div', 'hp-b'); fb3.append(boton('Descargar evaluación de todas (CSV)', () => descargar('avenidas_aproximacion.csv', csv([['Avenida', 'Ruta', 'Rol', 'Categoría', 'Puntaje', 'Distancia km', 'Tiempo h', 'Tiempo con altos h', 'Subida m', 'Bajada m', 'Pendiente media %', 'Pendiente máx %', '% sin restricción', '% restringido', '% sev. restringido', '% sobre caminos', 'Obstáculos', 'Ancho mínimo m', 'Cuellos', 'Encubrimiento %', 'Terreno clave'], ...filas]), 'text/csv'))); res.append(fb3);
   }
-  if (ESTADO.aa) { A = ESTADO.aa.A; B = ESTADO.aa.B; pintarPts(); dibujarAA(ESTADO.aa); tarjetas(ESTADO.aa); }
+  guardar(); pintarPanel(); dibujar();
 })();
-function avenidasAB(C, fz, escK, A, B) {
-  // C = pendientes de transitabilidad MDT (pendientes-cartas.js): raster de 20 m hecho con las curvas de las cartas IGM
+let RIOS = null; const cargarRios = () => RIOS ? Promise.resolve(RIOS) : fetch('data/rios_omasuyos.geojson').then(r => r.json()).then(d => RIOS = d).catch(() => (RIOS = { features: [] }));
+function avenidasRuta(C, D, fz, escK, puntos) {
+  // C = pendientes de transitabilidad MDT (20 m, hechas con las curvas de las cartas IGM); D = modelo de elevación del geovisor
   const m = C.meta, W0 = C.w, H0 = C.h, F = 3, w = Math.ceil(W0 / F), hh = Math.ceil(H0 / F), cel = (m.celda_m || 20) * F;
   const [X0, Y0] = merc(...m.nw), [X1, Y1] = merc(...m.se);
   const aIJ = ll => { const [x, y] = merc(ll[0], ll[1]); return [Math.floor((x - X0) / (X1 - X0) * w), Math.floor((Y0 - y) / (Y0 - Y1) * hh)]; };
   const aLL = (i, j) => { const x = X0 + (i + .5) / w * (X1 - X0), y = Y0 - (j + .5) / hh * (Y0 - Y1); return [x / RT / D2R, (2 * Math.atan(Math.exp(y / RT)) - Math.PI / 2) / D2R]; };
-  // 1) clase por celda de 60 m: 0 sin restricción · 1 restringido · 2 severamente restringido (un píxel suelto no cambia la celda)
-  const N = w * hh, nt = new Uint8Array(N), n1 = new Uint8Array(N), n2 = new Uint8Array(N), cls = new Uint8Array(N).fill(255);
-  for (let j = 0; j < H0; j++) { const jj = (j / F) | 0; for (let i = 0; i < W0; i++) { const v = C.v[j * W0 + i]; if (v === 255) continue; const k = jj * w + ((i / F) | 0), c = C.clase(v); nt[k]++; if (c === 1) n1[k]++; else if (c >= 2) n2[k]++; } }
-  for (let k = 0; k < N; k++) if (nt[k]) cls[k] = n2[k] * 3 >= nt[k] ? 2 : (n1[k] + n2[k]) * 3 >= nt[k] ? 1 : 0;
-  // mancha urbana: severamente restringido · agua (lagunas y lago): intransitable
-  if (C.mancha && C.mancha.features) { const mu = rasterPol(C.mancha.features, w, hh, aIJ); for (let k = 0; k < N; k++) if (mu[k] && cls[k] !== 255) cls[k] = 2; }
+  // 1) por celda de 60 m: clase (0 sin restricción · 1 restringido · 2 severamente restringido · 255 sin dato/agua) y pendiente media
+  const N = w * hh, nt = new Uint16Array(N), n1 = new Uint16Array(N), n2 = new Uint16Array(N), sp = new Float32Array(N), cls = new Uint8Array(N).fill(255), pend = new Float32Array(N);
+  for (let j = 0; j < H0; j++) { const jj = (j / F) | 0; for (let i = 0; i < W0; i++) { const v = C.v[j * W0 + i]; if (v === 255) continue; const k = jj * w + ((i / F) | 0), cc = C.clase(v); nt[k]++; sp[k] += v; if (cc === 1) n1[k]++; else if (cc >= 2) n2[k]++; } }
+  for (let k = 0; k < N; k++) if (nt[k]) { cls[k] = n2[k] * 3 >= nt[k] ? 2 : (n1[k] + n2[k]) * 3 >= nt[k] ? 1 : 0; pend[k] = sp[k] / nt[k]; }
+  const urb = C.mancha && C.mancha.features ? rasterPol(C.mancha.features, w, hh, aIJ) : new Uint8Array(N);
+  { const u2 = urb.slice(); for (let j = 0; j < hh; j++) for (let i = 0; i < w; i++) if (urb[j * w + i]) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii >= 0 && jj >= 0 && ii < w && jj < hh) u2[jj * w + ii] = 1; }
+    for (let k = 0; k < N; k++) if (u2[k]) cls[k] = 255; }   // poblaciones (mancha urbana) + 1 celda de margen: severamente restringido, ninguna avenida pasa por ellas
+  // «limpio»: celda sin terreno restringido (como mucho 1 píxel de 20 m de los 9) — para las rutas que NO pueden pisar zonas restringidas
+  const limpio = new Uint8Array(N); for (let k = 0; k < N; k++) limpio[k] = cls[k] !== 255 && nt[k] && (n1[k] + n2[k]) <= 1 ? 1 : 0;
   const agua = rasterPol(AGUA.features, w, hh, aIJ); for (let k = 0; k < N; k++) if (agua[k]) cls[k] = 255;
-  // vías
-  const via = new Uint8Array(N);
-  (typeof roadFeatures !== 'undefined' ? roadFeatures : []).forEach(f => { if (!/Carretera|secundario|terciario|vecinal|Calle/i.test(f.properties.tipo_via || '') || /intransitable/i.test(f.properties.estado || '')) return; for (const l of f.geometry.coordinates) for (let n = 1; n < l.length; n++) linea(aIJ(l[n - 1]), aIJ(l[n]), (i, j) => { if (i >= 0 && j >= 0 && i < w && j < hh) via[j * w + i] = 1; }); });
+  // vías y ríos
+  const via = new Uint8Array(N), rio = new Uint8Array(N);
+  (typeof roadFeatures !== 'undefined' ? roadFeatures : []).forEach(f => { const tv = f.properties.tipo_via || ''; if (!(fz === 'inf' ? /Carretera|secundario|terciario|vecinal|Calle|herradura|sendero|brecha/i : /Carretera|secundario|terciario|vecinal|Calle/i).test(tv) || /intransitable/i.test(f.properties.estado || '')) return; const g = f.geometry, Ls = g.type === 'LineString' ? [g.coordinates] : g.coordinates; for (const l of Ls) for (let n = 1; n < l.length; n++) linea(aIJ(l[n - 1]), aIJ(l[n]), (i, j) => { if (i >= 0 && j >= 0 && i < w && j < hh) via[j * w + i] = 1; }); });
+  (RIOS?.features || []).forEach(f => { if (!/^R[ií]o/i.test(f.properties.tipo || '')) return; const g = f.geometry, Ls = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []; for (const l of Ls) for (let n = 1; n < l.length; n++) linea(aIJ(l[n - 1]), aIJ(l[n]), (i, j) => { if (i >= 0 && j >= 0 && i < w && j < hh) rio[j * w + i] = 1; }); });
+  // elevación de cada celda (modelo hecho con las curvas de nivel IGM)
+  const Z = new Float32Array(N); if (D) for (let j = 0; j < hh; j++) for (let i = 0; i < w; i++) { const [lo, la] = aLL(i, j), z = zDem(D, lo, la); Z[j * w + i] = z == null ? 3808 : z; }
   // 2) ancho del corredor: distancia al terreno que no es «sin restricción»
   const dist = new Float32Array(N), INF = 1e9;
   for (let k = 0; k < N; k++) dist[k] = cls[k] === 0 ? INF : 0;
   for (let j = 0; j < hh; j++) for (let i = 0; i < w; i++) { const k = j * w + i; if (!dist[k]) continue; let d = dist[k]; if (i) d = Math.min(d, dist[k - 1] + 1); if (j) { d = Math.min(d, dist[k - w] + 1); if (i) d = Math.min(d, dist[k - w - 1] + 1.414); if (i < w - 1) d = Math.min(d, dist[k - w + 1] + 1.414); } dist[k] = d; }
   for (let j = hh - 1; j >= 0; j--) for (let i = w - 1; i >= 0; i--) { const k = j * w + i; if (!dist[k]) continue; let d = dist[k]; if (i < w - 1) d = Math.min(d, dist[k + 1] + 1); if (j < hh - 1) { d = Math.min(d, dist[k + w] + 1); if (i < w - 1) d = Math.min(d, dist[k + w + 1] + 1.414); if (i) d = Math.min(d, dist[k + w - 1] + 1.414); } dist[k] = d; }
-  // 3) costos: «verde» solo entra en terreno sin restricción; «restringido» admite amarillo y rojo con mayor costo
-  const P = FZ[fz], costoV = new Float32Array(N), costoR = new Float32Array(N);
-  for (let k = 0; k < N; k++) { const c = cls[k], b = via[k] ? P.via : 1; costoV[k] = c === 0 ? b : Infinity; costoR[k] = c === 255 ? Infinity : P.costo[c] * b; }
-  const [ai, aj] = aIJ(A), [bi, bj] = aIJ(B);
-  const ajustar = (costo, i, j, R) => { const ok = (x, y) => x >= 0 && y >= 0 && x < w && y < hh && isFinite(costo[y * w + x]); if (ok(i, j)) return [i, j, 0]; for (let r = 1; r < R; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if ((Math.abs(di) === r || Math.abs(dj) === r) && ok(i + di, j + dj)) return [i + di, j + dj, Math.round(Math.hypot(di, dj) * cel)]; return null; };
-  const sR = ajustar(costoR, ai, aj, 25), tR = ajustar(costoR, bi, bj, 25); if (!sR || !tR) return null;
-  const sV = ajustar(costoV, ai, aj, Math.round(2500 / cel)), tV = ajustar(costoV, bi, bj, Math.round(2500 / cel));
-  const pen = new Float32Array(N).fill(1), rutas = [];
-  const radio = Math.max(10, Math.round(1200 / cel)), libre = Math.round(1500 / cel);
-  const penalizar = (p, s, t) => { for (const k of p) { const i = k % w, j = (k / w) | 0; if (Math.hypot(i - s[0], j - s[1]) < libre || Math.hypot(i - t[0], j - t[1]) < libre) continue;
-    for (let dj = -radio; dj <= radio; dj += 2) for (let di = -radio; di <= radio; di += 2) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= w || jj >= hh || di * di + dj * dj > radio * radio) continue; const q = jj * w + ii; pen[q] = 6; if (ii + 1 < w) pen[q + 1] = 6; if (jj + 1 < hh) { pen[q + w] = 6; if (ii + 1 < w) pen[q + w + 1] = 6; } } } };
-  // AA-1 y AA-2: solo por terreno verde
-  if (sV && tV) for (let n = 0; n < 2; n++) { const p = dijkstra(w, hh, costoV, pen, sV[1] * w + sV[0], tV[1] * w + tV[0]); if (!p) break; rutas.push({ p, tipo: 'verde', ajuste: Math.max(sV[2], tV[2]) }); penalizar(p, sV, tV); }
-  // AA-3: puede pasar por terreno restringido
-  { const p = dijkstra(w, hh, costoR, pen, sR[1] * w + sR[0], tR[1] * w + tR[0]); if (p) rutas.push({ p, tipo: 'restringido', ajuste: 0 }); }
-  if (!rutas.length) return null;
-  const sinVerde = !rutas.some(r => r.tipo === 'verde');
-  const minAncho = ESCALON[escK][1], tcF = (TC && TC.features) || [];
-  const evaluadas = rutas.map(({ p, tipo, ajuste }) => {
-    let L = 0, horas = 0, viaL = 0; const porCl = [0, 0, 0]; let obst = 0, prev = 0, anchoMin = Infinity, okAncho = 0, enc = 0, encN = 0; const cuellos = []; let enCuello = false;
+  // 3) costo de cada paso = HORAS para recorrerlo
+  const P = FZ[fz];
+  const fPend = p => p <= 30 ? 1 : p <= 60 ? 1.25 : p <= 100 ? 2.5 : 8;   // a pie: trepar / descolgarse en laderas fuertes
+  const pasoPie = (k, q, f) => {   // función de Tobler: v = 6·e^(−3,5·|pendiente + 0,05|) km/h, distinta al subir y al bajar
+    if (cls[q] === 255) return Infinity; const dm = f * cel, s = (Z[q] - Z[k]) / dm;
+    let t = dm / 1000 / (6 * Math.exp(-3.5 * Math.abs(s + .05))) * fPend(pend[q]);
+    if (via[q]) t *= .85; else if (rio[q]) t *= 2.5; return t;
+  };
+  const pasoMec = soloVerde => (k, q, f) => {
+    const cq = cls[q]; if (cq === 255 || (soloVerde && !limpio[q])) return Infinity;
+    if (rio[q] && !via[q]) { if (soloVerde) return Infinity; return f * cel / 1000 / P.vel[2] * 3; }
+    return f * cel / 1000 / (via[q] ? 30 : P.vel[cq]);
+  };
+  const vmax = fz === 'inf' ? 7.6 : 30;
+  // celda válida más cercana a cada punto
+  const ajustar = (ll, valido, R) => { const [i, j] = aIJ(ll), ok = (x, y) => x >= 0 && y >= 0 && x < w && y < hh && valido(y * w + x); if (ok(i, j)) return [i, j, 0]; for (let r = 1; r < R; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if ((Math.abs(di) === r || Math.abs(dj) === r) && ok(i + di, j + dj)) return [i + di, j + dj, Math.round(Math.hypot(di, dj) * cel)]; return null; };
+  const pen = new Float32Array(N).fill(1);
+  function rutaPor(paso, valido, R, hmin = cel / 1000 / vmax) {   // une los tramos partida → puntos de paso → objetivo
+    let total = [], aj = 0;
+    for (let n = 0; n < puntos.length - 1; n++) {
+      const s = ajustar(puntos[n], valido, R), t = ajustar(puntos[n + 1], valido, R); if (!s || !t) return null; aj = Math.max(aj, s[2], t[2]);
+      const p = astar(w, hh, s[1] * w + s[0], t[1] * w + t[0], paso, pen, hmin); if (!p) return null;
+      total = total.length ? total.concat(p.slice(1)) : p;
+    }
+    return { p: total, ajuste: aj };
+  }
+  const libre = Math.round(1200 / cel), radio = Math.max(8, Math.round((fz === 'inf' ? 700 : 1200) / cel)), PIJ = puntos.map(aIJ);
+  const penalizar = (p, fac) => { for (const k of p) { const i = k % w, j = (k / w) | 0; if (PIJ.some(q => Math.hypot(i - q[0], j - q[1]) < libre)) continue;
+    for (let dj = -radio; dj <= radio; dj++) for (let di = -radio; di <= radio; di++) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= w || jj >= hh || di * di + dj * dj > radio * radio) continue; const q = jj * w + ii; if (pen[q] < fac) pen[q] = fac; } } };
+  const solape = (p, previas) => { const S = new Set(previas.flatMap(r => r.p)); let n = 0; for (const k of p) if (S.has(k)) n++; return n / p.length; };
+  const rutas = []; let sinVerde = false;
+  const agregar = (paso, valido, R, tipo, fac) => {
+    for (const f of [fac, fac * 2.5]) {   // si sale casi igual a una anterior, se aleja más
+      const r = rutaPor(paso, valido, R); if (!r) return false;
+      if (rutas.length && solape(r.p, rutas) > .6 && f === fac) { penalizar(r.p, f * 2.5); continue; }
+      if (rutas.length && solape(r.p, rutas) > .85) return false;
+      rutas.push({ ...r, tipo, paso }); penalizar(r.p, f); return true;
+    }
+    return false;
+  };
+  if (fz === 'inf') {
+    // AA-1 · CASI RECTA: la menor distancia; solo evita el agua y rodea las laderas muy empinadas
+    const pasoRecta = (k, q, f) => cls[q] === 255 ? Infinity : f * cel / 1000 * (pend[q] > 100 ? 3 : pend[q] > 60 ? 1.3 : 1);
+    const r1 = rutaPor(pasoRecta, k => cls[k] !== 255, 25, cel / 1000);
+    // AA-2 · SIN ZONAS RESTRINGIDAS: solo terreno sin restricción (pendiente ≤ 30 %), fuera de la mancha urbana
+    const libreV = k => limpio[k] === 1, pasoVerde = (k, q, f) => libreV(q) ? pasoPie(k, q, f) : Infinity;
+    let r2 = rutaPor(pasoVerde, libreV, Math.round(2500 / cel)), r2tipo = 'verde';
+    if (!r2) { sinVerde = true; r2tipo = 'verdeMin';   // no hay paso continuo sin restricción: el que menos terreno restringido cruza
+      const pasoMin = (k, q, f) => { const t = pasoPie(k, q, f); return !isFinite(t) ? t : t * (urb[q] || cls[q] === 2 ? 30 : cls[q] === 1 ? 8 : 1); };
+      r2 = rutaPor(pasoMin, k => cls[k] !== 255, 25); }
+    // AA-3 · SEGÚN LAS CURVAS DE NIVEL: la más factible = menor tiempo de marcha subiendo y bajando (Tobler) y con la pendiente
+    const r3 = rutaPor(pasoPie, k => cls[k] !== 255, 25);
+    if (r1) rutas.push({ ...r1, tipo: 'recta', paso: pasoRecta });
+    if (r2) rutas.push({ ...r2, tipo: r2tipo, paso: pasoVerde });
+    if (r3) rutas.push({ ...r3, tipo: 'pie', paso: pasoPie });
+    if (!rutas.length) return null;
+  } else {
+    // mecanizada: SOLO terreno sin restricción (ni restringido, ni severamente restringido, ni poblaciones); 3 corredores distintos
+    // 11-11-2026 (como en el geovisor web): AA-1 y AA-2 SOLO por terreno sin restricción; AA-3 puede cruzar terreno
+    // restringido (amarillo) y, si no hay otra salida, severamente restringido (rojo) y ríos sin puente, con mayor costo.
+    // Si no hay paso continuo sin restricción, las 3 rutas admiten terreno restringido (se avisa en el resumen).
+    const verde = k => limpio[k] === 1, transitable = k => cls[k] !== 255;
+    const pasoR = (k, q, f) => { const cq = cls[q]; if (cq === 255) return Infinity; if (rio[q] && !via[q]) return f * cel / 1000 / P.vel[2] * 3; return f * cel / 1000 / (via[q] ? 30 : P.vel[cq]) * (cq === 2 ? 3 : 1); };
+    for (let n = 0; n < 2; n++) if (!agregar(pasoMec(true), verde, Math.round(2500 / cel), 'verde', 6 + n * 2)) break;
+    if (!rutas.length) sinVerde = true;
+    for (let n = 0; rutas.length < 3 && n < 3; n++) if (!agregar(pasoR, transitable, 25, 'restringido', 6 + n * 2)) break;
+    if (!rutas.length) return { error: 'para la fuerza mecanizada no hay paso entre esos puntos (agua, poblaciones o fuera de Omasuyos). Mueve la partida o el objetivo, o agrega puntos de paso.' };
+  }
+  const minAncho = ESCALON[escK][1], tcF = (TC && TC.features) || [], A = puntos[0], B = puntos[puntos.length - 1];
+  const evaluadas = rutas.map(({ p, tipo, ajuste, paso }) => {
+    let L = 0, horas = 0, viaL = 0, sube = 0, baja = 0, pm = 0, pMax = 0; const porCl = [0, 0, 0]; let obst = 0, prev = 0, prevRio = 0, anchoMin = Infinity, okAncho = 0, enc = 0, encN = 0; const cuellos = []; let enCuello = false;
     const coords = p.map(k => aLL(k % w, (k / w) | 0));
     for (let n = 1; n < p.length; n++) {
-      const k = p[n], d = kmH(coords[n - 1], coords[n]), c = cls[k]; L += d; porCl[c] += d; if (via[k]) viaL += d;
-      horas += d / (via[k] ? Math.max(P.vel[0], fz === 'mec' ? 30 : 4.5) : P.vel[c]);
-      if (c === 2 && prev !== 2) obst++; prev = c;
-      const ext = Math.min(L, 9e9); const lejos = kmH(coords[n], A) > 1 && kmH(coords[n], B) > 1;
-      const ancho = 2 * dist[k] * cel; if (lejos) { anchoMin = Math.min(anchoMin, ancho); if (ancho >= minAncho) okAncho += d; else if (!enCuello && ancho < minAncho * .6) { cuellos.push(coords[n]); enCuello = true; } if (ancho >= minAncho * .8) enCuello = false; }
+      const k0 = p[n - 1], k = p[n], f = (k0 % w !== k % w && ((k0 / w) | 0) !== ((k / w) | 0)) ? 1.414 : 1, d = f * cel / 1000, c = cls[k];
+      L += d; porCl[c] += d; if (via[k]) viaL += d; horas += fz === 'inf' ? pasoPie(k0, k, f) : paso(k0, k, f);
+      const dz = Z[k] - Z[k0]; if (dz > 0) sube += dz; else baja -= dz; pm += pend[k] * d; if (pend[k] > pMax) pMax = pend[k];
+      if ((c === 2 && prev !== 2) || (rio[k] && !via[k] && !prevRio)) obst++; prev = c; prevRio = rio[k] && !via[k];
+      const lejos = kmH(coords[n], A) > 1 && kmH(coords[n], B) > 1, ancho = 2 * dist[k] * cel;
+      if (lejos) { anchoMin = Math.min(anchoMin, ancho); if (ancho >= minAncho) okAncho += d; else if (!enCuello && ancho < minAncho * .6) { cuellos.push(coords[n]); enCuello = true; } if (ancho >= minAncho * .8) enCuello = false; }
       const cb = muestraCub(coords[n]); if (cb != null) { encN += d; if (cb === 1 || cb === 4 || cb === 6) enc += d; }
     }
     const tc = []; for (const f of tcF) { const g = f.geometry, pr = f.properties, pt = pr.lon != null ? [pr.lon, pr.lat] : g.type === 'Point' ? g.coordinates : null; if (!pt) continue; for (let n = 0; n < coords.length; n += 3) if (kmH(coords[n], pt) <= 1) { tc.push(pr.nombre || pr.tipo || 'K'); break; } }
     const pct = porCl.map(v => v / L * 100), lejosL = Math.max(.001, L - 2), pctAncho = Math.min(100, okAncho / lejosL * 100);
-    return { tipo, ajuste, coords: simplificar(coords), km: L, horas, pct, pctVia: viaL / L * 100, obst, anchoMin: isFinite(anchoMin) ? Math.round(anchoMin / 10) * 10 : 0, pctAncho, cuellos, encub: encN ? enc / encN * 100 : null, tc: [...new Set(tc)].slice(0, 6) };
+    const o = { tipo, ajuste, coords: simplificar(coords), km: L, horas, pct, pctVia: viaL / L * 100, obst, anchoMin: isFinite(anchoMin) ? Math.round(anchoMin / 10) * 10 : 0, pctAncho, cuellos, encub: encN ? enc / encN * 100 : null, tc: [...new Set(tc)].slice(0, 6) };
+    if (fz === 'inf') Object.assign(o, { horasAltos: horas * 60 / 50, subida: Math.round(sube), bajada: Math.round(baja), pendMedia: pm / L, pendMax: pMax });
+    return o;
   });
-  const minL = Math.min(...evaluadas.map(r => r.km));
+  const minL = Math.min(...evaluadas.map(r => r.km)), minH = Math.min(...evaluadas.map(r => r.horas));
   evaluadas.forEach(R => {
-    let s = 100 - R.pct[1] * .45 - R.pct[2] * 1.4 - R.obst * 4 - R.cuellos.length * 4 - (R.km / minL - 1) * 35 - (100 - R.pctAncho) * .15;
-    s += (fz === 'inf' ? .12 : .05) * (R.encub || 0) + Math.min(10, R.pctVia / 6);
+    let s;
+    if (fz === 'inf') s = 100 - (R.horas / minH - 1) * 60 - R.pct[1] * .2 - R.pct[2] * .8 - R.obst * 3 - R.cuellos.length * 2 - (100 - R.pctAncho) * .08 + .15 * (R.encub || 0) + Math.min(6, R.pctVia / 10);
+    else { s = 100 - R.pct[1] * .45 - R.pct[2] * 1.4 - R.obst * 4 - R.cuellos.length * 4 - (R.km / minL - 1) * 35 - (100 - R.pctAncho) * .15; s += .05 * (R.encub || 0) + Math.min(10, R.pctVia / 6); }
     R.puntaje = Math.max(0, Math.min(100, Math.round(s)));
     R.cat = R.puntaje >= 75 ? 'Muy favorable' : R.puntaje >= 55 ? 'Favorable' : R.puntaje >= 35 ? 'Poco favorable' : 'Desfavorable';
-    const n = []; if (R.pct[0] >= 85) n.push('terreno mayormente transitable'); if (R.pct[2] > 10) n.push('tramos severamente restringidos'); if (R.obst) n.push(R.obst + ' obstáculo(s) a superar'); if (R.cuellos.length) n.push('cuellos de botella: posible canalización'); if (R.pctVia > 50) n.push('aprovecha la red vial'); if ((R.encub || 0) > 20) n.push('buen encubrimiento'); else n.push('poco encubrimiento: expuesta a la observación'); if (R.tc.length) n.push('domina o pasa junto a terreno clave'); if (R.km / minL > 1.4) n.push('recorrido largo'); R.notas = n;
+    const n = [];
+    if (fz === 'inf') { n.push({ recta: 'la más corta y directa', verde: 'todo el recorrido por terreno sin restricción', verdeMin: 'no hay paso continuo sin restricción: cruza lo mínimo de terreno restringido', pie: 'la más factible según las curvas de nivel' }[R.tipo]); if (R.horas <= minH * 1.05) n.push('la más rápida a pie'); if (R.subida > 400) n.push(`subida fuerte (${miles(R.subida)} m acumulados)`); else if (R.subida < 150) n.push('poco desnivel'); if (R.pendMax > 60) n.push('tramos con pendiente mayor a 60 %'); }
+    if (R.pct[0] >= 85) n.push('terreno mayormente transitable'); if (R.pct[2] > 10) n.push('tramos severamente restringidos'); if (R.obst) n.push(R.obst + ' obstáculo(s) a superar'); if (R.cuellos.length) n.push('cuellos de botella: posible canalización'); if (R.pctVia > 50) n.push('aprovecha caminos y sendas'); if ((R.encub || 0) > 20) n.push('buen encubrimiento'); else n.push('poco encubrimiento: expuesta a la observación'); if (R.tc.length) n.push('domina o pasa junto a terreno clave'); if (R.km / minL > 1.4) n.push('recorrido largo');
+    R.notas = n;
   });
-  // primero las dos por terreno verde (ordenadas por puntaje), al final la que admite terreno restringido
-  const verdes = evaluadas.filter(R => R.tipo === 'verde').sort((a, b) => b.puntaje - a.puntaje), resto = evaluadas.filter(R => R.tipo !== 'verde');
-  const orden = [...verdes, ...resto];
-  ['Principal', 'Secundaria', 'Alterna'].forEach((r, i) => { if (orden[i]) orden[i].rol = r; });
-  return { fz, esc: escK, A, B, directa: kmH(A, B), rutas: orden, base: 'pendientes', umbrales: C.umbrales, sinVerde, fecha: new Date().toISOString() };
+  // a pie: ordenadas por puntaje · vehículos: primero las de terreno verde
+  const orden = fz === 'inf' ? evaluadas : [...evaluadas.filter(R => R.tipo === 'verde').sort((a, b) => b.puntaje - a.puntaje), ...evaluadas.filter(R => R.tipo !== 'verde')];
+  orden.slice().sort((a, b) => b.puntaje - a.puntaje).forEach((R, i) => { R.rol = ['Principal', 'Secundaria', 'Alterna'][i] || 'Alterna'; });
+  return { fz, esc: escK, A, B, puntos, directa: kmH(A, B), rutas: orden, base: 'pendientes', umbrales: C.umbrales, sinVerde, fecha: new Date().toISOString() };
+}
+function astar(w, hh, s, t, paso, pen, hmin) {   // A* sobre la rejilla (8 vecinos); costo = horas
+  const N = w * hh, g = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), hecho = new Uint8Array(N), ti = t % w, tj = (t / w) | 0;
+  let cap = 1 << 16, hk = new Int32Array(cap), hp = new Float64Array(cap), n = 0;
+  const push = (k, p) => { if (n === cap) { cap *= 2; const a = new Int32Array(cap), b = new Float64Array(cap); a.set(hk); b.set(hp); hk = a; hp = b; } let i = n++; while (i) { const q = (i - 1) >> 1; if (hp[q] <= p) break; hk[i] = hk[q]; hp[i] = hp[q]; i = q; } hk[i] = k; hp[i] = p; };
+  const pop = () => { const top = hk[0], lk = hk[--n], lp = hp[n]; let i = 0; for (;;) { const l = 2 * i + 1; if (l >= n) break; const r = l + 1, m = r < n && hp[r] < hp[l] ? r : l; if (hp[m] >= lp) break; hk[i] = hk[m]; hp[i] = hp[m]; i = m; } hk[i] = lk; hp[i] = lp; return top; };
+  const V = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+  g[s] = 0; push(s, 0);
+  while (n) {
+    const k = pop(); if (hecho[k]) continue; hecho[k] = 1; if (k === t) break;
+    const i = k % w, j = (k / w) | 0, gk = g[k];
+    for (const [di, dj, f] of V) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= w || jj >= hh) continue; const q = jj * w + ii; if (hecho[q]) continue;
+      const c = paso(k, q, f); if (!isFinite(c)) continue; const nd = gk + c * pen[q]; if (nd < g[q]) { g[q] = nd; prev[q] = k; push(q, nd + Math.hypot(ii - ti, jj - tj) * hmin); } }
+  }
+  if (!isFinite(g[t])) return null; const p = []; for (let k = t; k !== -1; k = prev[k]) p.push(k); return p.reverse();
 }
 function dijkstra(w, hh, costo, pen, s, t) {
   const N = w * hh, d = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), heap = [], tj = (t / w) | 0, ti = t % w;
@@ -273,21 +435,23 @@ function rasterPol(feats, w, hh, aIJ) {
   const d = c.getImageData(0, 0, w, hh).data, o = new Uint8Array(w * hh); for (let k = 0; k < o.length; k++) o[k] = d[k * 4 + 3] > 100 ? 1 : 0; return o;
 }
 function simplificar(c) { if (c.length < 4) return c; const o = [c[0]]; for (let n = 1; n < c.length - 1; n++) if (n % 2 === 0) o.push(c[n]); o.push(c[c.length - 1]); return o.map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]); }
-function dibujarAA(r) {
-  ponerCapa(); [...sub.aa.children].slice(1).forEach(e => e.remove());
+function dibujarAA(r, par, pref = '', op = 1, ocultas = []) {   // ocultas: índices de rutas apagadas   // par: grupo donde dibujar (sin él, reemplaza lo dibujado) · pref: «2·» para avenidas numeradas
+  ponerCapa(); if (!par) { [...sub.aa.children].slice(1).forEach(e => e.remove()); par = sub.aa; }
+  const cont = sv(par, 'g', { opacity: op });
   r.rutas.slice().reverse().forEach((R, iRev) => {
-    const i = r.rutas.length - 1 - iRev, col = COLOR_AA[i], pts = R.coords.map(c => aEscena(c[0], c[1]));
+    const i = r.rutas.length - 1 - iRev; if (ocultas.includes(i)) return; const col = COLOR_AA[i], pts = R.coords.map(c => aEscena(c[0], c[1]));
     const d = 'M' + pts.map(p => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join('L');
-    const g = sv(sub.aa, 'g', {});
+    const g = sv(cont, 'g', {});
     sv(g, 'path', { d, fill: 'none', stroke: col, 'stroke-opacity': .18, 'stroke-width': 22, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' });
     sv(g, 'path', { d, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-dasharray': '10 6', 'vector-effect': 'non-scaling-stroke' });
     // punta de flecha (símbolo de avenida de aproximación) y rótulo
     const n = pts.length, a = pts[Math.max(0, n - 6)], b = pts[n - 1], ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
     const fl = sv(g, 'g', { class: 'hp-m', 'data-x': b[0], 'data-y': b[1], transform: `translate(${b[0]} ${b[1]}) scale(${k1()})` });
     sv(fl, 'path', { d: 'M0 0L-22-13-18 0-22 13Z', fill: col, stroke: '#fff', 'stroke-width': 1.5, transform: `rotate(${ang})` });
+    const txt = pref + 'AA-' + (i + 1), wd = 14 + txt.length * 7.6;
     const m = pts[Math.floor(n * (.35 + .1 * i))], lab = sv(g, 'g', { class: 'hp-m', 'data-x': m[0], 'data-y': m[1], transform: `translate(${m[0]} ${m[1]}) scale(${k1()})` });
-    sv(lab, 'rect', { x: -26, y: -11, width: 52, height: 22, rx: 5, fill: col, stroke: '#fff', 'stroke-width': 2 });
-    const t = sv(lab, 'text', { x: 0, y: 5, 'text-anchor': 'middle', 'font-size': 12.5, 'font-weight': 800, fill: '#fff', 'font-family': 'Bahnschrift,system-ui,sans-serif' }); t.textContent = 'AA-' + (i + 1);
+    sv(lab, 'rect', { x: -wd / 2, y: -11, width: wd, height: 22, rx: 5, fill: col, stroke: '#fff', 'stroke-width': 2 });
+    const t = sv(lab, 'text', { x: 0, y: 5, 'text-anchor': 'middle', 'font-size': 12.5, 'font-weight': 800, fill: '#fff', 'font-family': 'Bahnschrift,system-ui,sans-serif' }); t.textContent = txt;
     R.cuellos.forEach(cu => marca(g, cu, '', col, 'x'));
   });
 }
@@ -419,7 +583,8 @@ const PAL_CUB = { 1: '#1F6F3B', 2: '#9CCC65', 3: '#E8D9B5', 4: '#6D6D6D', 5: '#4
   const ver = h('label'), cb = inp('checkbox'); ver.append(cb, document.createTextNode('Mostrar en el mapa')); c.append(ver);
   const modo = sel([['cob', 'Tipo de cobertura'], ['enc', 'Encubrimiento (contra la observación)'], ['cub', 'Cubierta (contra el fuego)']], 'cob'), opa = inp('range', 70, { min: 20, max: 100 });
   const f = h('div', 'fila'); f.append(rotulo('VER COMO', modo), rotulo('OPACIDAD', opa)); c.append(f);
-  const ley = h('table', 'hp-tabla'); c.append(ley);
+  const ley = h('table', 'hp-tabla hp-cub-t'); c.append(ley);
+  { const st = h('style'); st.textContent = '.hp-cub-t{table-layout:auto;width:100%}.hp-cub-t th,.hp-cub-t td{font-size:10px!important;word-break:normal!important;overflow-wrap:normal!important;hyphens:none;padding:3px 4px!important;vertical-align:top}.hp-cub-t td:nth-child(2){min-width:92px}'; document.head.append(st); }   // 10-11-2026: tabla legible
   let img = null, on = false;
   const COLE = { Bueno: '#1E8B4C', Escaso: '#E3B23C', Nulo: '#C0392B', Buena: '#1E8B4C', Nula: '#C0392B' };
   async function pintar() {
@@ -427,7 +592,10 @@ const PAL_CUB = { 1: '#1F6F3B', 2: '#9CCC65', 3: '#E8D9B5', 4: '#6D6D6D', 5: '#4
     let C; try { C = await cargarCub(); } catch (e) { mensaje(c, 'No se encontró data/cubierta_omasuyos.png.', true); return; }
     const cv = document.createElement('canvas'); cv.width = C.w; cv.height = C.h; const ctx = cv.getContext('2d'), im = ctx.createImageData(C.w, C.h);
     const col = {}; for (const [k, cl] of Object.entries(C.meta.clases)) { const hx = modo.value === 'cob' ? PAL_CUB[k] : COLE[modo.value === 'enc' ? cl.encubrimiento : cl.cubierta]; col[k] = [1, 3, 5].map(i => parseInt(hx.slice(i, i + 2), 16)); }
-    for (let n = 0; n < C.v.length; n++) { const v = C.v[n]; if (v === 255 || v === 3 && modo.value !== 'cob') { if (v === 3 && modo.value !== 'cob') im.data.set([...col[3], 70], n * 4); continue; } im.data.set([...col[v], 230], n * 4); }
+    // 10-11-2026: pintado rápido con una tabla de colores (antes: un arreglo nuevo por píxel; lento en la tablet)
+    const LUT = new Uint32Array(256), px = new Uint32Array(im.data.buffer), rgba = (c, a) => ((a << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+    for (const k in col) { const v = +k; LUT[v] = v === 3 && modo.value !== 'cob' ? rgba(col[3], 70) : rgba(col[k], 230); }
+    for (let n = 0, V = C.v; n < V.length; n++) { const v = V[n]; if (v !== 255) px[n] = LUT[v]; }
     ctx.putImageData(im, 0, 0);
     const [ax, ay] = aEscena(...C.meta.nw), [bx, by] = aEscena(...C.meta.se);
     img = sv(sub.cub, 'image', { x: ax, y: ay, width: bx - ax, height: by - ay, preserveAspectRatio: 'none', href: cv.toDataURL('image/png'), opacity: opa.value / 100, 'pointer-events': 'none' });
@@ -510,7 +678,7 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', '
    ===================================================================================================== */
 (function marchas() {
   const c = seccion('mar', 'Cálculo de marchas', 'columna y horario');
-  c.innerHTML = `<p>Calcula la <b>longitud de la columna</b>, el <b>tiempo de paso</b> y el <b>horario</b> de cabeza y cola en el punto inicial (PI), los puntos de control (PC) y el punto de liberación (PL). El itinerario puede ser una avenida de la herramienta 1 o uno que dibujes en el mapa.</p>`;
+  c.innerHTML = `<p>Calcula la <b>distancia de la columna</b>, el <b>tiempo de paso</b> y el <b>horario</b> de cabeza y cola en el punto inicial (PI), los puntos de control (PC) y el punto de liberación (PL). El itinerario puede ser una avenida de la herramienta 1 o uno que dibujes en el mapa.</p>`;
   const S = Object.assign({ veh: 30, dist: 50, largo: 7, unid: 3, inter: 2, vel: 30, alto: 10, hora: '05:00', fecha: new Date().toISOString().slice(0, 10), pc: 5 }, ESTADO.marcha || {});
   const it = sel([['ruta', 'Ruta por la red vial (pestaña RUTAS)'], ['aa0', 'Avenida AA-1'], ['aa1', 'Avenida AA-2'], ['aa2', 'Avenida AA-3'], ['dib', 'Itinerario dibujado en el mapa']], 'ruta');
   c.append(rotulo('ITINERARIO', it));
@@ -540,7 +708,7 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', '
     const filas = puntos.map(p => { const cab = horaEn(p.km), col = new Date(cab.valueOf() + tPasoMin * 6e4); return { ...p, ll: pos(p.km), cab, col }; });
     ESTADO.marcha.res = { L, longCol, tPasoMin, filas: filas.map(f => ({ n: f.n, km: f.km, cab: hhmm(f.cab), col: hhmm(f.col), utm: utm(...f.ll) })), dur: (filas[filas.length - 1].col - filas[0].cab) / 36e5 };
     LS.set('marcha', ESTADO.marcha);
-    out.innerHTML = `<table class="hp-tabla"><tr><td>Longitud del itinerario</td><td>${dec(L)} km</td></tr><tr><td>Longitud de la columna</td><td>${dec(longCol, 2)} km (${porUnidad} vehículos por unidad de marcha)</td></tr><tr><td>Tiempo de paso</td><td>${dec(tPasoMin, 0)} min</td></tr><tr><td>Duración total (cabeza en PI → cola en PL)</td><td>${dec(ESTADO.marcha.res.dur)} h, con altos de ${S.alto} min/h</td></tr></table>
+    out.innerHTML = `<table class="hp-tabla"><tr><td>Distancia del itinerario</td><td>${dec(L)} km</td></tr><tr><td>Distancia de la columna</td><td>${dec(longCol, 2)} km (${porUnidad} vehículos por unidad de marcha)</td></tr><tr><td>Tiempo de paso</td><td>${dec(tPasoMin, 0)} min</td></tr><tr><td>Duración total (cabeza en PI → cola en PL)</td><td>${dec(ESTADO.marcha.res.dur)} h, con altos de ${S.alto} min/h</td></tr></table>
 <table class="hp-tabla" style="margin-top:6px"><tr><th>Punto</th><th>km</th><th>Cabeza</th><th>Cola</th><th>Coordenada</th></tr>${filas.map(f => `<tr><td><b>${f.n}</b></td><td>${dec(f.km)}</td><td>${hhmm(f.cab)}</td><td>${hhmm(f.col)}</td><td style="font-size:9.5px">${esc(utm(...f.ll))}</td></tr>`).join('')}</table>`;
     const fb2 = h('div', 'hp-b'); fb2.append(boton('Descargar horario (CSV)', () => descargar('horario_marcha.csv', csv([['Punto', 'km', 'Hora cabeza', 'Hora cola', 'Coordenada UTM'], ...filas.map(f => [f.n, dec(f.km), hhmm(f.cab), hhmm(f.col), utm(...f.ll)])]), 'text/csv'))); out.append(fb2);
     ponerCapa(); const d = 'M' + P.map(p => aEscena(...p).map(v => v.toFixed(2)).join(' ')).join('L');
@@ -699,5 +867,6 @@ function centroide(p) { return [p.reduce((a, q) => a + q[0], 0) / p.length, p.re
 window.EMTE_HP_LIMPIAR = () => { soltar(); LIMPIEZA.forEach(f => { try { f(); } catch (e) { console.error(e); } }); };
 
 /* ---------- avisos entre herramientas ---------- */
+window.EMTE_HP_AA = () => (ESTADO.aa && ESTADO.aa.rutas || []).map((r, i) => ({ n: i + 1, tipo: r.tipo, coords: r.coords, km: r.km }));   // para «Puntos de observación»
 window.EMTE_HP_EVENTO = k => { if (k === 'aa' && ESTADO.marcha?.res) { try { window.EMTE_HP_MARCHA?.(); } catch (e) {} } };
 });

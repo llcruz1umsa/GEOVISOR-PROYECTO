@@ -102,6 +102,8 @@ function csv(filas) {
 }
 async function abrir() {
   fondo.hidden = false; fondo.innerHTML = '<div class="es-caja"><div class="es-cab"><b>ESTADÍSTICAS POR MUNICIPIO · PROVINCIA OMASUYOS</b></div><p style="padding:20px">Calculando…</p></div>';
+  // los límites municipales se cargan aquí si la capa «Municipios» aún no se encendió
+  if (!window.EMTE_MUNICIPIOS) { try { window.EMTE_MUNICIPIOS = await (await fetch('data/municipios_omasuyos.geojson')).json(); } catch (e) { fondo.querySelector('p').textContent = 'No se pudo cargar el límite de los municipios.'; return; } }
   const listo = () => window.EMTE_MUNICIPIOS && typeof healthFeatures !== 'undefined' && healthFeatures.length && educationFeatures.length && roadFeatures.length;
   for (let i = 0; i < 40 && !listo(); i++) await new Promise(r => setTimeout(r, 250));
   if (!listo()) { fondo.querySelector('p').textContent = 'Las capas aún se están cargando. Intenta de nuevo en unos segundos.'; return; }

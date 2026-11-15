@@ -282,7 +282,7 @@ function selectRiver(f) {
   poner(info,
     chips([[p.tipo, 'no'], [/modelad/i.test(p.verificacion_declarada || '') ? '◐ Modelado (verificar)' : '✔ Verificado', /modelad/i.test(p.verificacion_declarada || '') ? 'med' : 'si']]),
     bloque('1. IDENTIFICACIÓN', [['Nombre', titulo(p.nombre), p.fuente_nombre], ['Jerarquía', p.jerarquia, p.jerarquia_nota || (p.orden_str ? 'orden de Strahler ' + p.orden_str : null)], ['Tipo', p.tipo, p.tipo_osm ? 'según el nombre oficial (OSM decía ' + p.tipo_osm + ')' : null], ['Código', p.id_rio]]),
-    bloque('2. CARACTERÍSTICAS', [['Longitud', p.longitud_km_origen != null ? String(p.longitud_km_origen).replace('.', ',') + ' km' : null], ['Orden de Strahler', p.orden_str], ['Área de drenaje', p.area_dren_origen != null ? String(p.area_dren_origen).replace('.', ',') + ' km²' : null], ['Unidad hidrográfica (nivel 4)', p.uh_nivel4]]),
+    bloque('2. CARACTERÍSTICAS', [['Distancia', p.longitud_km_origen != null ? String(p.longitud_km_origen).replace('.', ',') + ' km' : null], ['Orden de Strahler', p.orden_str], ['Área de drenaje', p.area_dren_origen != null ? String(p.area_dren_origen).replace('.', ',') + ' km²' : null], ['Unidad hidrográfica (nivel 4)', p.uh_nivel4]]),
     bloque('3. UBICACIÓN (PUNTO MEDIO)', [['Municipio', titulo(p.municipio)], ['Código INE', p.codigo_ine], ...ubicacion(lo, la)]),
     bloque('4. FUENTE Y VERIFICACIÓN', [['Geometría', p.fuente_geometria], ['Verificación', p.verificacion_declarada], ['Observaciones', p.observacion]]));
 }

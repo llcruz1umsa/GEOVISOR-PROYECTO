@@ -18,7 +18,7 @@ function empezar() {
   svg.classList.add('moviendo');
   // Mientras dura el gesto, las coordenadas de la pantalla se calculan como si el mapa ya estuviera dibujado.
   svg.getScreenCTM = () => M0;
-  scene.getScreenCTM = () => { const s = scale; return M0.multiply(new DOMMatrix([s, 0, 0, s, 500 * (1 - s) + panX, 380 * (1 - s) + panY])); };
+  scene.getScreenCTM = () => { const s = scale; return DOMMatrix.fromMatrix(M0).multiply(new DOMMatrix([s, 0, 0, s, 500 * (1 - s) + panX, 380 * (1 - s) + panY])); };
   M0.r = r;
 }
 function mover() {

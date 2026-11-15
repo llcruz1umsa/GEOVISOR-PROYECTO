@@ -141,7 +141,7 @@ async function capturar() {
     const rect = G.escenaDelMarco(); const img = await G.imagenMarco(D.papel === 'A3' ? 2600 : 1900);
     if (n !== generacion) return;
     M = { img, rect, ley: (T.leyenda ? T.leyenda() : []) };
-  } catch (e) { console.error(e); aviso('No se pudo preparar el mapa del recuadro.', true); }
+  } catch (e) { console.error(e); aviso('No se pudo preparar el mapa del recuadro' + (e && e.message ? ': ' + e.message : '') + '. Mueve o achica el recuadro y vuelve a intentarlo.', true); }
   if (n === generacion) { cargando.hidden = true; listaLey(); pintar(); }
 }
 async function prepararMapa(ajustar) {
@@ -168,7 +168,7 @@ function moverPx(dx, dy) {   // desplaza el contenido del recuadro dx, dy píxel
 function acercar(f) {   // acerca o aleja manteniendo el centro del recuadro
   const G = window.EMTE_GUARDAR, r = G.escenaDelMarco(); if (!r) return;
   const P = new DOMPoint(r.r.left + r.r.width / 2, r.r.top + r.r.height / 2), aEsc = () => P.matrixTransform(sceneEl.getScreenCTM().inverse());
-  const q = aEsc(), [x, y] = centro(); scale = Math.max(.05, Math.min(480, scale * f)); ponerCentro(x, y);
+  const q = aEsc(), [x, y] = centro(); scale = Math.max(.008, Math.min(480, scale * f)); ponerCentro(x, y);
   const q2 = aEsc(), [x2, y2] = centro(); ponerCentro(x2 + (q.x - q2.x), y2 + (q.y - q2.y));
 }
 let tCap = 0;

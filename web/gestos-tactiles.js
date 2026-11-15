@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.stopImmediatePropagation(); e.preventDefault(); cortar();
     const m = medio(), pt = aVista(m.x, m.y);
     if (!m.d || !previo.d) return;
-    const viejo = scale, nuevo = Math.max(.65, Math.min(480, viejo * m.d / previo.d));
+    const viejo = scale, nuevo = Math.max(.008, Math.min(480, viejo * m.d / previo.d));
     const wx = (previo.pt.x - 500 - panX) / viejo, wy = (previo.pt.y - 380 - panY) / viejo;
     scale = nuevo; panX = pt.x - 500 - wx * nuevo; panY = pt.y - 380 - wy * nuevo;
     if (typeof vistaEnCuadro === 'function') vistaEnCuadro(); else zoom(1);

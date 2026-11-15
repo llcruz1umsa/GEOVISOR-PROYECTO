@@ -41,6 +41,10 @@ css.textContent = `#topo-fuerzas .fa-s{cursor:pointer}#topo-fuerzas .fa-s:hover{
 .fa-cab b{display:block;font:800 12.5px var(--tipo-titulo,system-ui);letter-spacing:.08em;color:#E2CB8E}
 .fa-cab small{display:block;margin-top:3px;font-size:10px;color:#d5dcea;line-height:1.35}
 .fa-op{display:grid;gap:4px;padding:8px 12px;border-bottom:1px solid #e5e9e3;background:#F8FAFC}
+.fa-todo{display:grid;grid-template-columns:1.6fr 1fr;gap:6px;margin-top:4px}
+.fa-todo button{padding:8px 6px;border:1px solid #0B1D33;border-radius:8px;background:linear-gradient(135deg,#12294A,#0B1D33);color:#fff;font:800 10px var(--tipo-titulo,system-ui);letter-spacing:.05em;cursor:pointer;line-height:1.2}
+.fa-todo button small{display:block;font-weight:600;color:#E2CB8E;letter-spacing:0}
+.fa-todo .fa-menos{background:#fff;color:#9B1C1C;border-color:#E8B7B7}
 .fa-op label{display:flex!important;gap:8px;align-items:center;font-size:11.5px!important;font-weight:600;color:#12294A}
 .fa-fz{border-top:1px solid #e5e9e3}
 .fa-fz>summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;font:800 12px var(--tipo-titulo,system-ui);letter-spacing:.08em;color:#fff!important;background:#0B1D33!important;list-style:none}
@@ -64,7 +68,22 @@ function ruta(geom) {
   for (const p of polys) for (const r of p) d += 'M' + r.map(c => aEscena(c[0], c[1]).map(v => v.toFixed(1)).join(' ')).join('L') + 'Z';
   return d;
 }
-const visible = f => vis.has(f.properties.cat) && (!soloOm || f.properties.om);
+// 10-11-2026: «Solo los de Omasuyos» muestra TODO lo de las FF.AA. que está en la provincia (unidades, puestos
+// militares, institutos, IGM, unidades navales y jurisdicciones), sin importar las categorías marcadas.
+const visible = f => soloOm ? !!f.properties.om : vis.has(f.properties.cat);
+// ¿el elemento está en Omasuyos o la toca? (punto dentro del límite, o polígonos que se cruzan)
+function dentroAnillo(pt, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; }
+const poligonos = g => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+const dentroGeom = (pt, g) => poligonos(g).some(p => dentroAnillo(pt, p[0]) && !p.slice(1).some(h => dentroAnillo(pt, h)));
+function marcarOmasuyos(lim) {
+  const anillosLim = poligonos(lim).map(p => p[0]);
+  for (const f of D.features) {
+    if (f.properties.om) continue; const g = f.geometry; let si = false;
+    if (g.type === 'Point') si = dentroGeom(g.coordinates, lim);
+    else { si = poligonos(g).some(p => p[0].some((c, i) => i % 5 === 0 && dentroGeom(c, lim))) || anillosLim.some(r => r.some((c, i) => i % 7 === 0 && dentroGeom(c, g))); }
+    if (si) f.properties.om = true;
+  }
+}
 function etiquetasLimite(f, k) {   // símbolo de escalón (XX, III) sobre la línea de límite, como en el calco
   const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
   const anillo = polys.map(p => p[0]).sort((a, b) => b.length - a.length)[0]; if (!anillo || anillo.length < 8) return;
@@ -101,7 +120,7 @@ function centro(f) {
   let sx = 0, sy = 0, n = 0; const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
   for (const p of polys) for (const c of p[0]) { sx += c[0]; sy += c[1]; n++; } return [sx / n, sy / n];
 }
-const ETQ = [['sigla', 'Nombre abreviado'], ['nombre', 'Nombre completo'], ['arma', 'Arma'], ['ubicacion', 'Ubicación'], ['provincia', 'Provincia'], ['guc', 'Gran Unidad / dependencia superior'], ['depende', 'Unidad de la que depende'], ['brigada', 'Brigada aérea'], ['dependencia', 'Dependencia'], ['nota', 'Nota']];
+const ETQ = [['codigo', 'Código'], ['sigla', 'Nombre abreviado'], ['nombre', 'Nombre completo'], ['arma', 'Arma'], ['ubicacion', 'Ubicación'], ['provincia', 'Provincia'], ['guc', 'Gran Unidad / dependencia superior'], ['depende', 'Unidad de la que depende'], ['brigada', 'Brigada aérea'], ['dependencia', 'Dependencia'], ['nota', 'Nota']];
 function ficha(f) {
   const F = window.EMTE_FICHA; if (!F) return;
   const p = f.properties, pol = f.geometry.type !== 'Point', c = pol ? null : f.geometry.coordinates, fz = FUERZAS.find(x => x[0] === p.fuerza);
@@ -121,13 +140,30 @@ function panel() {
   const body = document.querySelector('.calco-menu .calco-body'); if (!body || body.querySelector('.fa-sec')) return !!body;
   const sec = h('section', 'fa-sec');
   sec.innerHTML = `<div class="fa-cab"><b>FUERZAS ARMADAS · DATOS 2024 🔒</b><small>${D.features.length} elementos de EJERCITO_2024.gdb y UU.MOD, divididos por fuerza. Toca un elemento para ubicarlo y ver su ficha.</small></div>
-  <div class="fa-op"><label><input type="checkbox" class="fa-ver"> Mostrar en el mapa</label><label><input type="checkbox" class="fa-om"> Solo los de Omasuyos</label></div>`;
+  <div class="fa-op"><label><input type="checkbox" class="fa-ver"> Mostrar en el mapa</label><label><input type="checkbox" class="fa-om"> Solo los de Omasuyos</label><div class="fa-todo"><button type="button" class="fa-mas">＋ AGREGAR TODOS AL MAPA <small></small></button><button type="button" class="fa-menos">QUITAR TODOS</button></div></div>`;
   const ver = sec.querySelector('.fa-ver'), om = sec.querySelector('.fa-om');
   ver.onchange = () => { activo = ver.checked; dibujar(); };
-  om.onchange = () => { soloOm = om.checked; sec.querySelectorAll('.fa-it').forEach(b => { b.hidden = soloOm && !b.classList.contains('om'); }); contar(); dibujar(); };
+  om.onchange = () => {
+    soloOm = om.checked; rotTodos(); sec.querySelectorAll('.fa-it').forEach(b => { b.hidden = soloOm && !b.classList.contains('om'); }); contar();
+    if (soloOm && !ver.checked) { ver.checked = true; activo = true; }   // al activarlo se ve en el mapa de una vez
+    dibujar();
+    if (soloOm && window.EMTE_TOPO?.volar) window.EMTE_TOPO.volar(-69.02, -16.28, -68.46, -15.74);
+  };
   const contadores = [], cbs = {};
+  // agregar / quitar TODOS los elementos (todas las fuerzas y categorías) de una vez
+  const mas = sec.querySelector('.fa-mas'), menos = sec.querySelector('.fa-menos'), nTodos = () => D.features.filter(f => !soloOm || f.properties.om).length;
+  const rotTodos = () => { mas.querySelector('small').textContent = nTodos() + ' elementos' + (soloOm ? ' de Omasuyos' : ''); };
+  mas.onclick = () => {
+    D.features.forEach(f => vis.add(f.properties.cat)); Object.values(cbs).forEach(c => { c.checked = true; });
+    ver.checked = true; activo = true; dibujar();
+    const P = D.features.filter(visible).map(centro).filter(c => c && isFinite(c[0]));
+    if (P.length && window.EMTE_TOPO?.volar) { const lo = P.map(c => c[0]), la = P.map(c => c[1]); window.EMTE_TOPO.volar(Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)); }
+  };
+  menos.onclick = () => { vis.clear(); Object.values(cbs).forEach(c => { c.checked = false; }); ver.checked = false; activo = false; dibujar(); };
+  setTimeout(rotTodos, 0);
   // API para el organigrama y la búsqueda de FFAA (ffaa-organigrama.js)
   window.EMTE_FFAA = { D, icono, FUERZAS, centro,
+    todos: () => mas.click(), quitarTodos: () => menos.click(),
     mostrar: v => { if (ver.checked !== !!v) { ver.checked = !!v; activo = !!v; dibujar(); } },
     ir: f => { const cat = f.properties.cat; if (!vis.has(cat)) { vis.add(cat); if (cbs[cat]) cbs[cat].checked = true; } if (!ver.checked) { ver.checked = true; activo = true; } dibujar();
       const [lo, la] = centro(f); if (f.geometry.type === 'Point') window.EMTE_FICHA?.centrar(lo, la); ficha(f); } };
@@ -165,6 +201,7 @@ function panel() {
   contar(); body.append(sec); return true;
 }
 Promise.all([fetch('planeamiento/simbolos.json').then(r => r.ok ? r.json() : Promise.reject()), fetch('planeamiento/fuerzas_armadas.json').then(r => r.ok ? r.json() : Promise.reject())])
+  .then(([s, d]) => fetch('data/limite_omasuyos.geojson').then(r => r.json()).then(l => { D = d; try { marcarOmasuyos(l.features[0].geometry); } catch (e) {} }, () => {}).then(() => [s, d]))
   .then(([s, d]) => { SV = s.svg; D = d; window.EMTE_FUERZAS_ARMADAS = d; let n = 0; (function esperar() { if (!panel() && ++n < 80) setTimeout(esperar, 250); })(); })
   .catch(() => {});
 const zoomAnterior = zoom;

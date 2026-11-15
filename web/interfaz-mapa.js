@@ -262,7 +262,7 @@ function vistaGeneral() {
     const vb = mini.viewBox.baseVal, main = scene.ownerSVGElement, m = scene.getScreenCTM(), r = main.getBoundingClientRect();
     if (!vb || !vb.width || !m || !r.width) return;
     const ppu = Math.hypot(m.a, m.b), obj = Math.min(r.width / vb.width, r.height / vb.height) * .95;
-    const nuevo = Math.max(.05, Math.min(480, scale * obj / ppu)), cx = vb.x + vb.width / 2, cy = vb.y + vb.height / 2;
+    const nuevo = Math.max(.008, Math.min(480, scale * obj / ppu)), cx = vb.x + vb.width / 2, cy = vb.y + vb.height / 2;
     panX = (500 - cx) * nuevo; panY = (380 - cy) * nuevo; zoom(nuevo / scale);
   }
   let arr = null;

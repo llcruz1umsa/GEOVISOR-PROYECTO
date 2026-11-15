@@ -122,7 +122,7 @@ document.head.append(css);
 let vuelo = 0;
 function volar(lon0, lat0, lon1, lat1) {
   const [ax, ay] = aEscena(lon0, lat1), [bx, by] = aEscena(lon1, lat0), cx = (ax + bx) / 2, cy = (ay + by) / 2;
-  const s1 = Math.max(.05, Math.min(480, Math.min(1000 / Math.max(bx - ax, 1e-6), 760 / Math.max(by - ay, 1e-6)) * .85));
+  const s1 = Math.max(.008, Math.min(480, Math.min(1000 / Math.max(bx - ax, 1e-6), 760 / Math.max(by - ay, 1e-6)) * .85));
   const s0 = scale, c0 = [500 - panX / s0, 380 - panY / s0], id = ++vuelo, t0 = performance.now();
   const paso = t => {
     if (id !== vuelo) return;
@@ -497,9 +497,19 @@ function componerHoja(op) {
 const PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'display', 'visibility', 'font-family', 'font-size', 'font-weight', 'letter-spacing', 'paint-order', 'vector-effect'];
 const aDataURL = blob => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(blob); });
 async function incrustar(url) {
-  try { const abs = new URL(url, location.href), mismo = abs.origin === location.origin;
-    const r = await fetch(abs.href, mismo ? { credentials: 'same-origin' } : { mode: 'cors', credentials: 'omit' }); if (!r.ok) return null; return await aDataURL(await r.blob()); }
-  catch (e) { return null; }
+  // 12-11-2026: en el programa de escritorio la política de seguridad no deja leer con fetch() las imágenes «blob:»
+  // ni las teselas de internet; entonces se copian dibujándolas en un lienzo (así la carta y las imágenes salen completas).
+  const abs = (() => { try { return new URL(url, location.href); } catch (e) { return null; } })(); if (!abs) return null;
+  if (abs.protocol !== 'blob:') {
+    try { const mismo = abs.origin === location.origin;
+      const r = await fetch(abs.href, mismo ? { credentials: 'same-origin' } : { mode: 'cors', credentials: 'omit' }); if (r.ok) { const d = await aDataURL(await r.blob()); if (d) return d; } }
+    catch (e) { /* se intenta con el lienzo */ }
+  }
+  return await Promise.race([new Promise(res => {
+    const i = new Image(); if (abs.protocol !== 'blob:' && abs.protocol !== 'data:' && abs.origin !== location.origin) i.crossOrigin = 'anonymous';
+    i.onload = () => { try { const c = document.createElement('canvas'); c.width = i.naturalWidth || 256; c.height = i.naturalHeight || 256; c.getContext('2d').drawImage(i, 0, 0); res(c.toDataURL('image/png')); } catch (e) { res(null); } };
+    i.onerror = () => res(null); i.src = abs.href;
+  }), new Promise(res => setTimeout(() => res(null), 12000))]);
 }
 function pdfDesdeJPEG(bytes, anchoPx, altoPx, anchoPt, altoPt, titulo) {
   const enc = new TextEncoder(), partes = [], pos = []; let largo = 0;

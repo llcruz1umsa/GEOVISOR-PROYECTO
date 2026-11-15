@@ -102,7 +102,7 @@ const subIco = t => (SUBICO.find(([r]) => r.test(t)) || [0, ICO.capas])[1];
 const PESTANAS = [
   { id: 'base', t: 'Mapa base', d: 'Elige el fondo del mapa: satélite 2026 sin internet, estándar, relieve o sin fondo.', es: e => /^Tipo de mapa/i.test(sum(e)) },
   { id: 'capas', t: 'Capas', d: 'Elige un grupo para encender o apagar su información.', es: e => /^Capas del mapa/i.test(sum(e)) || e.classList.contains('lod-opcion') },
-  { id: 'herr', t: 'Herramientas', d: 'Medir, perfil del terreno, coordenadas, imprimir la carta, exportar y análisis del terreno.', es: e => /^Herramientas/i.test(sum(e)) },
+  { id: 'herr', t: 'Herramientas', d: 'Medir, perfil del terreno, coordenadas, imprimir la carta, exportar y análisis del terreno.', es: e => /^Herramientas/i.test(sum(e)) || e.classList.contains('ej-menu') },   // 10-11-2026: Ejercicios pasó a Herramientas
   { id: 'rutas', t: 'Rutas', d: 'Calcula la ruta y el tiempo de viaje entre dos puntos por la red vial.', es: e => e.classList.contains('route-panel') },
   { id: 'plan', t: 'Planeamiento', d: 'Calco militar, catálogo de símbolos y Fuerzas Armadas. Elige un cuadro o busca un símbolo.', es: e => e.matches('.calco-menu,.pc-menu,.ap-menu,.coc-menu,.tc-menu,.hp-menu') },
   { id: 'cartas', t: 'Cartas', d: 'Cartas topográficas IGM de Omasuyos y unidades militares.', es: e => e.classList.contains('cc-menu') }
@@ -127,6 +127,7 @@ aside.pp-inicio .pp-tab svg{width:30px;height:30px}
 .pp-atras:hover{background:#B79A5B;color:#0B1D33}
 .pp-nav b{min-width:0;color:#fff;font:800 12px var(--tipo-titulo,system-ui);letter-spacing:.08em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pp-grilla{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0 0 12px;animation:pp-entra .28s ease}
+html[data-rol=invitado] .pp-tab[data-id=plan]{display:none!important}
 .pp-cel{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:7px;min-height:104px;padding:13px 6px 10px;border:1px solid #D7DEE8;border-radius:12px;background:#fff;color:#12294A;text-align:center;cursor:pointer;box-shadow:0 2px 8px #0B1D3312;transition:transform .15s,box-shadow .15s,border-color .15s}
 .pp-cel:hover{transform:translateY(-2px);border-color:#B79A5B;box-shadow:0 8px 18px #0B1D3322}
 .pp-cel .ic{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;background:#EEF2F8;color:#12294A}
@@ -150,7 +151,7 @@ function divisiones(id) {
   if (id === 'plan') {
     const B = document.querySelector('.calco-menu .calco-body');
     if (!B) {   // invitados: sin calco, solo las secciones de análisis
-      const ex = [...aside.querySelectorAll(':scope > .pc-menu, :scope > .ap-menu, :scope > .coc-menu, :scope > .tc-menu, :scope > .hp-menu')]; if (ex.length < 2) return null;
+      const ex = [...aside.querySelectorAll(':scope > .pc-menu, :scope > .ap-menu, :scope > .coc-menu, :scope > .tc-menu, :scope > .hp-menu:not(.ej-menu)')]; if (ex.length < 2) return null;
       return { contenedor: null, partes: ex.map(e => ({ k: 'x:' + nombreSum(e), t: nombreSum(e).replace(/\s*·.*$/, ''), d: (nombreSum(e).match(/·\s*(.*)$/) || [])[1] || '', els: [e] })), todos: ex, fijos: [] };
     }
     const cat = document.getElementById('calco-cat'), fa = B.querySelector('.fa-sec'), q = document.getElementById('calco-q');
@@ -164,7 +165,7 @@ function divisiones(id) {
     // 02-11-2026: Ejército, Armada, Fuerza Aérea y Comando en Jefe juntos en un solo cuadro «FFAA»
     if (fzs.length) partes.push({ k: 'ffaa', t: 'FFAA', d: suma(fzs) + ' elementos 🔒', els: [fa] });
     // secciones de análisis que otros módulos agregan a esta pestaña (pendientes MDT, apoyo al planeamiento, COC/TC)
-    const menu = B.closest('.calco-menu'), extras = [...aside.querySelectorAll(':scope > .pc-menu, :scope > .ap-menu, :scope > .coc-menu, :scope > .tc-menu, :scope > .hp-menu')];
+    const menu = B.closest('.calco-menu'), extras = [...aside.querySelectorAll(':scope > .pc-menu, :scope > .ap-menu, :scope > .coc-menu, :scope > .tc-menu, :scope > .hp-menu:not(.ej-menu)')];
     extras.forEach(e => partes.splice(extras.indexOf(e), 0, { k: 'x:' + nombreSum(e), t: nombreSum(e).replace(/\s*·.*$/, ''), d: (nombreSum(e).match(/·\s*(.*)$/) || [])[1] || '', els: [e], fuera: true }));
     return { contenedor: B, menu, partes, todos: [...B.children, ...extras, menu], fijos: q ? [q] : [], buscar: q && q.value.trim() ? [cat] : null };
   }
@@ -214,7 +215,7 @@ function pintar() {
 }
 function pestanaDe(e) { if (e === barra || e === cuadro || e === nav || e === grilla || e.tagName === 'STYLE' || e.tagName === 'SCRIPT') return null; const p = PESTANAS.find(p => p.es(e)); return p ? p.id : 'herr'; }
 PESTANAS.forEach(p => {
-  const b = h('button', 'pp-tab'); b.type = 'button'; b.setAttribute('role', 'tab'); b.innerHTML = ICO[p.id] + `<span>${p.t}</span>`; b.title = p.d;
+  const b = h('button', 'pp-tab'); b.type = 'button'; b.dataset.id = p.id; b.setAttribute('role', 'tab'); b.innerHTML = ICO[p.id] + `<span>${p.t}</span>`; b.title = p.d;
   b.onclick = () => { actual = p.id; sub = null; pintar(); aside.scrollTop = 0; };
   botones[p.id] = b; barra.append(b);
 });
@@ -231,7 +232,14 @@ vigilar(); setTimeout(vigilar, 1500); setTimeout(vigilar, 5000);
 document.addEventListener('input', e => { if (e.target.id === 'calco-q') pintar(); });
 document.addEventListener('change', e => { if (actual === 'capas' && !sub && aside.contains(e.target)) pintar(); });
 pintar();
-window.EMTE_PESTANA = id => { if (botones[id]) { actual = id; sub = null; pintar(); } };
+const esInvitado = () => document.documentElement.dataset.rol === 'invitado';
+window.EMTE_PESTANA = id => { if (botones[id] && !(id === 'plan' && esInvitado())) { actual = id; sub = null; pintar(); } };
+// 05-11-2026: la pestaña PLANEAMIENTO solo existe para quien ingresa con usuario y contraseña (no para invitados)
+function aplicarRol() {
+  const inv = esInvitado(); botones.plan.hidden = inv; botones.plan.style.display = inv ? 'none' : '';
+  if (inv && actual === 'plan') { actual = null; sub = null; pintar(); }
+}
+aplicarRol(); new MutationObserver(aplicarRol).observe(document.documentElement, { attributes: true, attributeFilter: ['data-rol'] });
 
 /* ---------- planeamiento ---------- */
 function planeamiento() {
@@ -242,12 +250,13 @@ function planeamiento() {
   const nombre = d => (d.querySelector(':scope > summary')?.firstChild?.textContent || '').trim();
   const num = d => { const m = nombre(d).match(/^(\d+)\./); return m ? +m[1] : null; };
   const SUP = [
-    { t: 'Fuerzas propias', c: '#1f6fd1', f: n => [2, 3, 4, 5, 6, 7, 8, 10, 17, 18].includes(n) },
+    { t: 'Fuerzas propias', c: '#1f6fd1', f: n => [2, 3, 4, 5, 6, 7, 8, 10, 18].includes(n) },
+    { t: 'Líneas y zonas', c: '#B79A5B', f: n => n === 17 },   // 03-11-2026: una sola línea y una sola zona; el tipo se elige al dibujar
     { t: 'Enemigo', c: '#ff1f1f', f: n => [11, 12, 13, 14, 15, 16, 19].includes(n) },
-    { t: 'Tareas tácticas', c: '#45999f', f: (n, d) => /^Tareas tácticas/i.test(nombre(d)) },
+    { t: 'Tareas tácticas', c: '#4597a0', f: (n, d) => /^Tareas tácticas/i.test(nombre(d)) },
     { t: 'Obstáculos y otros', c: '#2e9b3e', f: n => [9, 20, 21, 22].includes(n) }
   ];
-  if (!grupos.some(d => num(d) === 22)) return true;
+  if (!grupos.some(d => num(d) === 17)) return true;   // espera a que el catálogo termine (último grupo)
   cat.dataset.pp = '1';
   grupos.filter(d => num(d) === 1).forEach(d => d.remove());   // «1. Símbolos básicos» eliminado
   SUP.forEach((S, i) => {

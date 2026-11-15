@@ -101,8 +101,9 @@ css2.textContent = `
 .av-panel td.h input{display:block;width:44px;margin:1px auto;padding:1px 3px;font-size:10px}
 .av-panel td.h small{display:block;font-size:7.5px;color:#7a8698;line-height:1}
 .av-panel td.r{width:84px}
-.av-panel td.r input[type=number]{width:46px;padding:1px 3px;font-size:10px}
+.av-panel td.r input[inputmode=decimal]{width:46px;padding:1px 3px;font-size:10px}
 .av-panel td.r input[type=range]{margin:2px 0 0!important}
+.av-panel td.r .av-rt{display:block;font:700 9.5px system-ui;color:#12294A}
 .av-panel td.res{font-size:9.5px!important}
 .av-panel td.res b{font-size:11px}
 .av-panel .av-pie{padding:6px 10px!important;font-size:10px!important;flex-wrap:wrap}
@@ -110,7 +111,7 @@ css2.textContent = `
 .av-panel .rp-nota{padding:4px 10px 8px!important;font-size:9px!important}
 .av-panel .av-def{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 12px;background:#f6f3ea;border-bottom:1px solid #e3e8f0;font:11px var(--tipo-texto,system-ui);color:#3a4658}
 .av-panel .av-def label{display:flex;flex-direction:column;gap:2px;font-weight:600}
-.av-panel input[type=number]{width:100%;box-sizing:border-box;padding:3px 5px;border:1px solid #cfd6e6;border-radius:5px;font:600 11.5px system-ui;color:#12294A;text-align:right}
+.av-panel input[inputmode=decimal]{width:100%;box-sizing:border-box;padding:3px 5px;border:1px solid #cfd6e6;border-radius:5px;font:600 11.5px system-ui;color:#12294A;text-align:right}
 .av-panel .av-tw{max-height:300px;overflow:auto}
 .av-panel table{width:100%;border-collapse:collapse;font:11.5px var(--tipo-texto,system-ui);color:#14233A}
 .av-panel th{position:sticky;top:0;background:#0B1D33;color:#fff;font:600 10px var(--tipo-titulo,system-ui);letter-spacing:.04em;padding:5px 4px;text-align:center;text-transform:uppercase}
@@ -131,9 +132,9 @@ document.head.append(css2);
 const COLORES = ['#1F6FD1', '#C0392B', '#2E8B47', '#8E44AD', '#D35400', '#16A085', '#B7950B', '#34495E'];
 const panel = h('section', 'rp-panel av-panel'); panel.hidden = true; panel.setAttribute('aria-label', 'Área visible desde puntos de observación');
 panel.innerHTML = `<div class="rp-cab"><b>ÁREA VISIBLE · PUNTOS DE OBSERVACIÓN</b><button type="button" class="at-cerrar" aria-label="Cerrar">×</button></div>
-<div class="av-def"><label>Observador (m)<input type="number" class="av-dho" min="0" max="300" step="0.5" value="1.7"></label>
-<label>Objetivo (m)<input type="number" class="av-dht" min="0" max="300" step="0.5" value="1.7"></label>
-<label>Radio (km)<input type="number" class="av-dr" min="0.5" max="30" step="0.5" value="5"></label></div>
+<div class="av-def"><label>Observador (m)<input type="text" inputmode="decimal" class="av-dho" value="1,7" title="Metros (se puede escribir con coma o punto)"></label>
+<label>Objetivo (m)<input type="text" inputmode="decimal" class="av-dht" value="1,7" title="Metros (se puede escribir con coma o punto)"></label>
+<label>Radio (km)<input type="text" inputmode="decimal" class="av-dr" value="5" title="De 0,1 km (100 m) a 20 km · se puede escribir con coma o punto"></label></div>
 <div class="av-tw"><table><thead><tr><th>N.º</th><th>Ubicación (UTM)</th><th>Alturas (m)</th><th>Radio (km)</th><th>Alcance visible</th><th></th></tr></thead><tbody class="av-filas"></tbody></table>
 <div class="av-vacio">Haz clic en el mapa para agregar un punto de observación.<br>Los valores de arriba se usan para cada punto nuevo.</div></div>
 <div class="av-pie"><span class="av-tot"></span><span><button type="button" class="av-todos">Aplicar valores a todos</button> <button type="button" class="av-limpiar">Quitar todos</button></span></div>
@@ -145,13 +146,20 @@ let visActivo = false, sigId = 1;
 const puntos = [];
 const gVis = document.createElementNS(NS, 'g'); gVis.id = 'topo-area-visible'; gVis.setAttribute('pointer-events', 'none');
 $p('.at-cerrar').onclick = () => abrirVis(false);
-$p('.av-limpiar').onclick = () => { puntos.splice(0).forEach(p => p.g.remove()); tabla(); };
+$p('.av-limpiar').onclick = () => { puntos.splice(0).forEach(p => p.g.remove()); tabla(); guardarPuntos(); };
+// 12-11-2026: al cambiar los valores de arriba se aplican enseguida a los puntos ya marcados (antes solo a los nuevos)
+['.av-dho', '.av-dht', '.av-dr'].forEach(c => $p(c).addEventListener('change', () => {
+  const d = defecto(); $p('.av-dho').value = String(d.ho).replace('.', ','); $p('.av-dht').value = String(d.ht).replace('.', ','); $p('.av-dr').value = String(d.r).replace('.', ',');
+  if (puntos.length) { puntos.forEach(p => Object.assign(p, d)); tabla(); puntos.forEach(calcularPunto); }
+}));
+$p('.av-dr').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 $p('.av-todos').onclick = () => { const d = defecto(); puntos.forEach(p => Object.assign(p, d)); tabla(); puntos.forEach(calcularPunto); };
+const RMAX = 20;   // 12-11-2026: radio hasta 20 km
 const num = (v, lo, hi, def) => { v = parseFloat(String(v).replace(',', '.')); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; };
-const defecto = () => ({ ho: num($p('.av-dho').value, 0, 300, 1.7), ht: num($p('.av-dht').value, 0, 300, 1.7), r: num($p('.av-dr').value, .5, 30, 5) });
+const defecto = () => ({ ho: num($p('.av-dho').value, 0, 300, 1.7), ht: num($p('.av-dht').value, 0, 300, 1.7), r: num($p('.av-dr').value, .1, RMAX, 5) });
 function abrirVis(on) {
   visActivo = on; panel.hidden = !on; mapa.classList.toggle('at-activo', on); tarjVis.classList.toggle('chosen', on);
-  if (!on) { gVis.remove(); return; }
+  if (!on) { if (puntos.length) colocar(); return; }
   if (puntos.length) colocar();
   dem().catch(() => { vacio.textContent = 'No se pudo cargar el modelo de elevación.'; });
 }
@@ -162,15 +170,15 @@ function z(D, lon, lat) {
   const x = Math.floor(fx), y = Math.floor(fy), tx = fx - x, ty = fy - y, Z = D.z, W = D.w, x1 = Math.min(x + 1, W - 1), y1 = Math.min(y + 1, D.h - 1);
   return (Z[y * W + x] * (1 - tx) + Z[y * W + x1] * tx) * (1 - ty) + (Z[y1 * W + x] * (1 - tx) + Z[y1 * W + x1] * tx) * ty;
 }
-function agregar([lon, lat]) {
+function agregar([lon, lat], prev) {
   const D = window.EMTE_DEM && window.EMTE_DEM(); if (!D) return;
   const z0 = z(D, lon, lat); if (z0 == null) { vacio.hidden = false; vacio.textContent = 'Ese punto está fuera del modelo de elevación.'; return; }
-  const id = sigId++, p = Object.assign({ id, lon, lat, z0, color: COLORES[(id - 1) % COLORES.length], g: document.createElementNS(NS, 'g') }, defecto());
+  const id = sigId++, p = Object.assign({ id, lon, lat, z0, color: COLORES[(id - 1) % COLORES.length], g: document.createElementNS(NS, 'g') }, defecto(), prev || {});
   puntos.push(p); colocar(); gVis.append(p.g); tabla(); calcularPunto(p);
 }
 function calcularPunto(p) {
   const D = window.EMTE_DEM && window.EMTE_DEM(); if (!D) return;
-  const { lon, lat, ho, ht } = p, R = p.r * 1000, CEL = Math.max(30, Math.min(90, R / 160)), PASO = CEL * .7;
+  const { lon, lat, ho, ht } = p, R = p.r * 1000, CEL = Math.max(8, Math.min(90, R / 160)), PASO = CEL * .7;
   const RAYOS = Math.min(6000, Math.max(720, Math.ceil(2 * Math.PI * R / (CEL * .8)))), kR = 1 - .13, Rt = 6371000;
   const mLon = 111320 * Math.cos(lat * D2R), mLat = 110574;
   const n = Math.ceil(R / CEL) * 2 + 1, c = (n - 1) / 2, vis = new Int8Array(n * n);   // 0 sin dato, 1 visible, 2 oculto
@@ -199,12 +207,18 @@ function calcularPunto(p) {
   img.setAttribute('preserveAspectRatio', 'none'); img.setAttribute('href', cv.toDataURL('image/png')); img.style.imageRendering = 'pixelated'; p.g.append(img);
   const [px, py] = aEscena(lon, lat), circ = document.createElementNS(NS, 'circle');
   circ.setAttribute('cx', px); circ.setAttribute('cy', py); circ.setAttribute('r', (bx - ax) / 2 * (R / half)); circ.setAttribute('fill', 'none'); circ.setAttribute('stroke', p.color); circ.setAttribute('stroke-width', 2); circ.setAttribute('stroke-dasharray', '6 4'); circ.setAttribute('vector-effect', 'non-scaling-stroke'); p.g.append(circ);
+  const rpx = (bx - ax) / 2 * (R / half), et = document.createElementNS(NS, 'g'); et.setAttribute('class', 'at-obs'); et.dataset.x = px; et.dataset.y = py - rpx; et.setAttribute('transform', `translate(${px} ${py - rpx}) scale(${1 / scale})`);
+  const tx = distTxt(p.r), w = tx.length * 6.6 + 14;
+  et.innerHTML = `<rect x="${-w / 2}" y="-9" width="${w}" height="18" rx="9" fill="#fff" stroke="${p.color}" stroke-width="1.6"/><text y="4" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui" fill="${p.color}">${tx}</text>`; p.g.append(et);
   const m = document.createElementNS(NS, 'g'); m.setAttribute('class', 'at-obs'); m.dataset.x = px; m.dataset.y = py; m.setAttribute('transform', `translate(${px} ${py}) scale(${1 / scale})`);
   m.innerHTML = `<circle r="10" fill="#fff"/><circle r="8.2" fill="${p.color}"/><text y="3.6" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui" fill="#fff">${p.id}</text>`; p.g.append(m);
+  guardarPuntos();
   p.res = { km2: nv * CEL * CEL / 1e6, pct: nt ? nv / nt * 100 : 0, max: maxAlc / 1000, medio: sumaAlc / RAYOS / 1000 };
   const td = filas.querySelector(`tr[data-id="${p.id}"] td.res`); if (td) td.innerHTML = resTxt(p);
   total();
 }
+function distTxt(km) { return km < 1 ? Math.round(km * 1000) + ' m' : dec(km, km % 1 ? 1 : 0) + ' km'; }
+function guardarPuntos() { try { localStorage.setItem('emte-av-puntos', JSON.stringify(puntos.map(p => ({ lon: p.lon, lat: p.lat, ho: p.ho, ht: p.ht, r: p.r })))); } catch (e) {} }
 const resTxt = p => p.res ? `<b>${dec(p.res.max, 1)} km</b> máx.<br>${dec(p.res.medio, 1)} km medio · ${dec(p.res.pct, 0)} %` : '…';
 function total() { const r = puntos.filter(p => p.res), mx = r.reduce((a, p) => Math.max(a, p.res.max), 0), md = r.length ? r.reduce((a, p) => a + p.res.medio, 0) / r.length : 0; $p('.av-tot').textContent = puntos.length ? `${puntos.length} punto${puntos.length > 1 ? 's' : ''} · alcance máx. ${dec(mx, 1)} km · medio ${dec(md, 1)} km` : ''; }
 let tCalc = 0;
@@ -216,17 +230,17 @@ function tabla() {
     const tr = h('tr'); tr.dataset.id = p.id; const u = T ? T.textos(p.lat, p.lon) : null;
     tr.innerHTML = `<td class="n"><b style="background:${p.color}">${p.id}</b></td>
 <td class="u">${u ? u.utm.replace(/^19S /, '').replace(/ E · /, ' E<br>').replace(/ · /, '<br>') : p.lat.toFixed(5) + '<br>' + p.lon.toFixed(5)}<br><span style="color:#7a5c12">${miles(p.z0)} m s.n.m.</span></td>
-<td class="h"><small>OBS.</small><input type="number" data-k="ho" min="0" max="300" step="0.5" value="${p.ho}" aria-label="Altura del observador" title="Altura de los ojos del observador sobre el suelo"><small>OBJ.</small><input type="number" data-k="ht" min="0" max="300" step="0.5" value="${p.ht}" aria-label="Altura del objetivo" title="Altura del objetivo que se quiere ver (persona 1,7 m, vehículo 2,5–3 m)"></td>
-<td class="r"><input type="number" data-k="r" min="0.5" max="30" step="0.5" value="${p.r}" aria-label="Distancia de visibilidad en km"><input type="range" data-k="rr" min="0.5" max="30" step="0.5" value="${p.r}" aria-label="Regulador de distancia"></td>
+<td class="h"><small>OBS.</small><input type="text" inputmode="decimal" data-k="ho" value="${String(p.ho).replace('.', ',')}" aria-label="Altura del observador" title="Altura de los ojos del observador sobre el suelo"><small>OBJ.</small><input type="text" inputmode="decimal" data-k="ht" value="${String(p.ht).replace('.', ',')}" aria-label="Altura del objetivo" title="Altura del objetivo que se quiere ver (persona 1,7 m, vehículo 2,5–3 m)"></td>
+<td class="r"><input type="text" inputmode="decimal" data-k="r" value="${String(p.r).replace('.', ',')}" aria-label="Distancia de visibilidad en km" title="De 0,1 km (100 m) a 20 km"><input type="range" data-k="rr" min="0.1" max="20" step="0.1" value="${p.r}" aria-label="Regulador de distancia (100 m a 10 km)"><small class="av-rt">${distTxt(p.r)}</small></td>
 <td class="res">${resTxt(p)}</td><td><button type="button" class="av-x" title="Quitar punto" aria-label="Quitar punto ${p.id}">×</button></td>`;
     const ni = tr.querySelector('[data-k=r]'), rg = tr.querySelector('[data-k=rr]');
     const recalcular = () => { clearTimeout(tCalc); tr.querySelector('td.res').textContent = '…'; tCalc = setTimeout(() => calcularPunto(p), 250); };
-    tr.querySelectorAll('input[type=number]').forEach(inp => inp.addEventListener('change', () => {
-      const k = inp.dataset.k, v = k === 'r' ? num(inp.value, .5, 30, p.r) : num(inp.value, 0, 300, p[k]);
-      p[k] = v; inp.value = v; if (k === 'r') rg.value = v; recalcular();
+    tr.querySelectorAll('input[data-k]:not([type=range])').forEach(inp => inp.addEventListener('change', () => {
+      const k = inp.dataset.k, v = k === 'r' ? num(inp.value, .1, RMAX, p.r) : num(inp.value, 0, 300, p[k]);
+      p[k] = v; inp.value = String(v).replace('.', ','); if (k === 'r') { rg.value = v; tr.querySelector('.av-rt').textContent = distTxt(v); } recalcular();
     }));
-    rg.addEventListener('input', () => { p.r = +rg.value; ni.value = rg.value; recalcular(); });
-    tr.querySelector('.av-x').onclick = () => { p.g.remove(); puntos.splice(puntos.indexOf(p), 1); tabla(); total(); };
+    rg.addEventListener('input', () => { p.r = +rg.value; ni.value = String(rg.value).replace('.', ','); tr.querySelector('.av-rt').textContent = distTxt(p.r); recalcular(); });
+    tr.querySelector('.av-x').onclick = () => { p.g.remove(); puntos.splice(puntos.indexOf(p), 1); tabla(); total(); guardarPuntos(); };
     filas.append(tr);
   });
   total();
@@ -244,6 +258,8 @@ svgMapa.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && visActivo) abrirVis(false); });
 const zoomAnterior = zoom;
 zoom = function (f) { zoomAnterior(f); gVis.querySelectorAll('.at-obs').forEach(g => g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${1 / scale})`)); };
+// los puntos guardados vuelven al abrir el geovisor (quedan en el mapa hasta «Quitar todos» o ×)
+(function restaurar() { let L = []; try { L = JSON.parse(localStorage.getItem('emte-av-puntos') || '[]'); } catch (e) {} if (!Array.isArray(L) || !L.length) return; dem().then(() => L.forEach(q => { if (isFinite(q.lon) && isFinite(q.lat)) agregar([q.lon, q.lat], { ho: num(q.ho, 0, 300, 1.7), ht: num(q.ht, 0, 300, 1.7), r: num(q.r, .1, RMAX, 5) }); })).catch(() => {}); })();
 window.EMTE_AREA_VISIBLE = { abrir: () => abrirVis(true), calcular: ll => { abrirVis(true); dem().then(() => agregar(ll)); } };
 
 /* =============== tarjetas en «Herramientas del mapa» y casilla en Capas =============== */
